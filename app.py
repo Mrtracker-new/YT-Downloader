@@ -21,6 +21,7 @@ from threading import Lock, Event
 from flask import Flask, jsonify, request, send_file, render_template, send_from_directory
 from flask_cors import CORS
 from yt_dlp import YoutubeDL
+from werkzeug.utils import secure_filename
 
 # -----------------------
 # Flask App and Logging Configuration
@@ -45,6 +46,7 @@ DOWNLOAD_DIR = str(Path.home() / "Downloads")
 PREVIEW_DIR = os.path.join(os.getcwd(), 'previews')
 
 # Ensure required directories exist
+COOKIES_DIR = os.path.join(os.getcwd(), 'cookies')
 os.makedirs(PREVIEW_DIR, exist_ok=True)
 
 # -----------------------
@@ -350,6 +352,22 @@ def home():
     """Render the main interface."""
     return render_template('index.html')
 
+@app.route('/api/upload-cookies', methods=['POST'])
+def upload_cookies():
+    if 'cookies' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+    
+    cookies_file = request.files['cookies']
+    if cookies_file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    
+    if cookies_file and cookies_file.filename.endswith('.txt'):
+        filename = secure_filename('cookies.txt')
+        save_path = os.path.join(COOKIES_DIR, filename)
+        cookies_file.save(save_path)
+        return jsonify({'message': 'Cookies uploaded successfully'})
+    
+    return jsonify({'error': 'Invalid file type - must be .txt'}), 400
 
 @app.route('/api/preview', methods=['POST'])
 def generate_preview():
@@ -402,7 +420,7 @@ def get_info():
 
         app.logger.info(f"Fetching info for URL: {url}")
         ydl_opts = {
-            'cookies': 'cookies.txt',
+            'cookiefile': os.path.join(COOKIES_DIR, 'cookies.txt')
             'quiet': True,
             'no_warnings': True,
             'extract_flat': True,
@@ -478,7 +496,7 @@ def start_download():
             'quiet': True,
             'noplaylist': True,
             'ffmpeg_location': FFMPEG_PATH,
-            'cookies': cookies_file,
+            'cookiefile': os.path.join(COOKIES_DIR, 'cookies.txt')
             
         }
 
