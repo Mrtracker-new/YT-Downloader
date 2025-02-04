@@ -21,8 +21,11 @@ A modern YouTube video and audio downloader web application with dark/light them
 - 🎞️ Thumbnail previews
 - 📈 Real-time stats
 
+### After pasting the YouTube URL and clicking the "Analyze Video" button, the system will process the video details.
 ![Feature Demo](screenshots/2.png)
 
+### 
+The preview feature allows you to watch a preview of the video before downloading.
 ![Feature Demo](screenshots/3.png)
 
 ![Feature Demo](screenshots/4.png)
