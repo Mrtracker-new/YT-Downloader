@@ -471,6 +471,7 @@ def start_download():
     app.logger.info(f"Starting download {download_id} for URL: {data.get('url')}")
 
     try:
+        cookies_file = "cookies.txt"
         ydl_opts = {
             'outtmpl': os.path.join(DOWNLOAD_DIR, f'%(title)s_{download_id}.%(ext)s'),
             'quiet': True,
