@@ -89,11 +89,9 @@ A modern YouTube video and audio downloader web application with dark/light them
 ## 🛠️ Configuration
 Environment variables (optional):
 
-env
-Copy
-DOWNLOAD_DIR=/path/to/downloads
-PREVIEW_DIR=/path/to/previews
-CUSTOM_FFMPEG_PATH=/path/to/ffmpeg
+    DOWNLOAD_DIR=/path/to/downloads
+    PREVIEW_DIR=/path/to/previews
+    CUSTOM_FFMPEG_PATH=/path/to/ffmpeg
 
 ## 📚 Usage
 Paste a YouTube URL in the input field
