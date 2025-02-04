@@ -42,7 +42,7 @@ A modern YouTube video and audio downloader web application with dark/light them
 
 ## Install FFmpeg:
 
-###For Ubuntu/Debian
+### For Ubuntu/Debian
     sudo apt install ffmpeg
 
 ### For Windows (using chocolatey)
