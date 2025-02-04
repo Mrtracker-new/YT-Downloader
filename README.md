@@ -105,7 +105,7 @@ Environment variables (optional):
 - Manage downloads through the history panel
 
 ## 🧰 Tech Stack
-Backend:
+**Backend**:
 
 - Python 3
 
