@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YT Premium Downloader</title>
+  
+  <!-- Link to external CSS (served via Flask's static folder) -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+
+  <link rel="icon" href="/static/rnr.jpeg" type="image/x-icon">
+  
+  <!-- Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+      <div class="logo">
+        <i class="fab fa-youtube"></i>
+        <h1>YT Premium<span id="typewriter"></span></h1>
+      </div>
+      <div class="nav-controls">
+        <button id="themeToggle" class="icon-btn" title="Toggle theme">
+          <i class="fas fa-moon"></i>
+        </button>
+        <button id="showHistory" class="icon-btn" title="Show download history">
+          <i class="fas fa-history"></i>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <div class="content-wrapper">
+      <!-- Input Card: URL Input and Analyze Button -->
+      <section class="input-card">
+        <div class="input-group">
+          <input type="text" id="urlInput" placeholder="Paste YouTube URL or video ID...">
+          <button id="analyzeBtn" class="gradient-btn">
+            <i class="fas fa-magic"></i> Analyze Video
+          </button>
+        </div>
+        <div class="examples">
+          <span>Try:</span>
+          <button class="example-url">https://youtu.be/dQw4w9WgXcQ</button>
+          <button class="example-url">PLA playlist ID</button>
+        </div>
+      </section>
+
+      <!-- Video Information and Download Progress -->
+      <main class="main-content">
+        <div id="videoInfo" class="video-info"></div>
+        <div id="downloadProgress"></div>
+      </main>
+    </div>
+
+    <!-- Download History Panel -->
+    <aside id="historyPanel" class="history-panel">
+      <div class="history-header">
+        <h3><i class="fas fa-history"></i> Download History</h3>
+        <button class="history-close">&times;</button>
+      </div>
+      <div id="historyList" class="history-list"></div>
+    </aside>
+
+    <!-- Download Manager Panel -->
+    <aside id="downloadManager" class="download-manager">
+      <div class="history-header">
+        <h3>Download Manager</h3>
+        <button class="download-control" title="Close download manager">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div id="activeDownloads" class="history-list"></div>
+    </aside>
+  </div>
+
+  <!-- Footer Section -->
+  <footer class="footer">
+    <div class="footer-container">
+      <div class="footer-logo">
+        <i class="fab fa-youtube"></i>
+        <h2>YT Premium Downloader</h2>
+      </div>
+      <div class="footer-socials">
+        <a href="https://x.com/RolanLobo4" title="X (formerly Twitter)">
+          <i class="fab fa-x-twitter"></i>
+        </a>
+        <a href="https://github.com/Mrtracker-new/" title="GitHub">
+          <i class="fab fa-github"></i>
+        </a>
+        <a href="https://www.instagram.com/rolan_r_n_r/" title="Instagram">
+          <i class="fab fa-instagram"></i>
+        </a>
+      </div>
+      <p class="footer-text">© 2024 YT Premium Downloader by Rolan. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <!-- Link to JavaScript (served via Flask's static folder) -->
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
