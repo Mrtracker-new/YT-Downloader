@@ -21,7 +21,6 @@ from threading import Lock, Event
 from flask import Flask, jsonify, request, send_file, render_template, send_from_directory
 from flask_cors import CORS
 from yt_dlp import YoutubeDL
-from werkzeug.utils import secure_filename
 
 # -----------------------
 # Flask App and Logging Configuration
@@ -46,7 +45,6 @@ DOWNLOAD_DIR = str(Path.home() / "Downloads")
 PREVIEW_DIR = os.path.join(os.getcwd(), 'previews')
 
 # Ensure required directories exist
-COOKIES_DIR = os.path.join(os.getcwd(), 'cookies')
 os.makedirs(PREVIEW_DIR, exist_ok=True)
 
 # -----------------------
@@ -352,22 +350,6 @@ def home():
     """Render the main interface."""
     return render_template('index.html')
 
-@app.route('/api/upload-cookies', methods=['POST'])
-def upload_cookies():
-    if 'cookies' not in request.files:
-        return jsonify({'error': 'No file uploaded'}), 400
-    
-    cookies_file = request.files['cookies']
-    if cookies_file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-    
-    if cookies_file and cookies_file.filename.endswith('.txt'):
-        filename = secure_filename('cookies.txt')
-        save_path = os.path.join(COOKIES_DIR, filename)
-        cookies_file.save(save_path)
-        return jsonify({'message': 'Cookies uploaded successfully'})
-    
-    return jsonify({'error': 'Invalid file type - must be .txt'}), 400
 
 @app.route('/api/preview', methods=['POST'])
 def generate_preview():
@@ -420,11 +402,28 @@ def get_info():
 
         app.logger.info(f"Fetching info for URL: {url}")
         ydl_opts = {
-            'cookiefile': os.path.join(COOKIES_DIR, 'cookies.txt')
             'quiet': True,
-            'no_warnings': True,
+            'no_warnings': False,
             'extract_flat': True,
-            'force_generic_extractor': True
+            'force_generic_extractor': True,
+            'cachedir': False,
+            'rm_cache': True,
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'referer': 'https://www.youtube.com/',
+            'headers': {
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate',
+                'DNT': '1',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'same-site',
+            },
+            'retries': 10,
+            'fragment_retries': 10,
+            'ignoreerrors': False,
+            'no_check_certificate': True,
+            'force_ipv4': True,
         }
 
         with YoutubeDL(ydl_opts) as ydl:
@@ -490,14 +489,20 @@ def start_download():
     app.logger.info(f"Starting download {download_id} for URL: {data.get('url')}")
 
     try:
-        cookies_file = "cookies.txt"
         ydl_opts = {
             'outtmpl': os.path.join(DOWNLOAD_DIR, f'%(title)s_{download_id}.%(ext)s'),
             'quiet': True,
             'noplaylist': True,
             'ffmpeg_location': FFMPEG_PATH,
-            'cookiefile': os.path.join(COOKIES_DIR, 'cookies.txt')
-            
+            'cachedir': False,
+            'rm_cache': True,
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'referer': 'https://www.youtube.com/',
+            'retries': 10,
+            'fragment_retries': 10,
+            'ignoreerrors': False,
+            'no_check_certificate': True,
+            'force_ipv4': True,
         }
 
         if data['type'] == 'audio':
@@ -604,5 +609,5 @@ def serve_file(filename):
 if __name__ == '__main__':
     # Start the background thread for cleaning up preview files
     threading.Thread(target=cleanup_previews, daemon=True).start()
-    app.logger.info("Starting Flask app on host 0.0.0.0, port 10000")
-    app.run(host='0.0.0.0', port=10000, threaded=True)
+    app.logger.info("Starting Flask app on host 0.0.0.0, port 5000")
+    app.run(host='0.0.0.0', port=5000, threaded=True)
