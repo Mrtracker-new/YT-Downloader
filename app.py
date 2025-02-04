@@ -402,6 +402,7 @@ def get_info():
 
         app.logger.info(f"Fetching info for URL: {url}")
         ydl_opts = {
+            'cookies': 'cookies.txt',
             'quiet': True,
             'no_warnings': True,
             'extract_flat': True,
