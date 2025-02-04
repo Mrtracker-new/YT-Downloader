@@ -22,6 +22,7 @@ A modern YouTube video and audio downloader web application with dark/light them
 - 📈 Real-time stats
 
 ![Feature Demo](screenshots/2.png)
+
 ![Feature Demo](screenshots/3.png)
 ![Feature Demo](screenshots/4.png)
 ![Feature Demo](screenshots/5.png)
