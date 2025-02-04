@@ -15,6 +15,7 @@ import threading
 import subprocess
 import platform
 import shutil
+import random
 from pathlib import Path
 from threading import Lock, Event
 
@@ -43,9 +44,17 @@ app.logger.setLevel(logging.INFO)
 
 DOWNLOAD_DIR = str(Path.home() / "Downloads")
 PREVIEW_DIR = os.path.join(os.getcwd(), 'previews')
+COOKIE_FILE = os.path.join(os.getcwd(), 'cookies.txt')
+PROXY_POOL = [
+    'http://proxy1.example:8080',    # Replace with actual proxies
+    'http://proxy2.example:8080',
+    'socks5://user:pass@proxy3.example:1080'
+]
+
 
 # Ensure required directories exist
 os.makedirs(PREVIEW_DIR, exist_ok=True)
+app.logger.setLevel(logging.INFO)
 
 # -----------------------
 # Global Variables and Locks
@@ -134,6 +143,19 @@ else:
     app.logger.error("❌ FFmpeg not found! Critical functionality disabled")
 
 # -----------------------
+# Enhanced Network Configuration
+# -----------------------
+def get_random_proxy():
+    return random.choice(PROXY_POOL) if PROXY_POOL else None
+
+def get_random_user_agent():
+    agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.4 Safari/605.1.15',
+        'Mozilla/5.0 (Linux; Android 10; SM-G960U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.147 Mobile Safari/537.36'
+    ]
+    return random.choice(agents)
+# -----------------------
 # Utility Functions
 # -----------------------
 
@@ -143,6 +165,23 @@ def sanitize_filename(name):
     """
     return re.sub(r'[\\/*?:"<>|]', '', str(name)).strip()
 
+def normalize_youtube_url(url):
+    replacements = [
+        ('m.youtube.com', 'www.youtube.com'),
+        ('youtube-nocookie.com', 'youtube.com'),
+        ('/embed/', '/watch?v='),
+        ('youtu.be/', 'youtube.com/watch?v=')
+    ]
+    for old, new in replacements:
+        url = url.replace(old, new)
+    return url
+
+def validate_url(url):
+    patterns = [
+        r'(?:https?://)?(?:www\.)?youtube\.com/watch\?v=[\w-]{11}',
+        r'(?:https?://)?youtu\.be/[\w-]{11}'
+    ]
+    return any(re.match(p, url) for p in patterns)
 
 def validate_url(url):
     """
@@ -169,6 +208,46 @@ RESOLUTION_MAP = {
     '8K': 4320
 }
 
+
+def get_ydl_options(base=False):
+    options = {
+        'user_agent': get_random_user_agent(),
+        'referer': 'https://www.youtube.com/',
+        'http_headers': {
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Upgrade-Insecure-Requests': '1'
+        },
+        'proxy': get_random_proxy(),
+        'rate_limit': 1024 * 50,  # 50 KB/s
+        'retries': 20,
+        'throttled_rate': '100K',
+        'randomize_range': True,
+        'no_check_certificate': True,
+        'compat_opts': ['no-youtube-unavailable-videos'],
+        'wait_for_video': (5, 60),
+        'sleep_interval': 15,
+        'max_sleep_interval': 30,
+    }
+
+    if os.path.exists(COOKIE_FILE):
+        options.update({
+            'cookiefile': COOKIE_FILE,
+            'cookiesfrombrowser': ('chrome',)
+        })
+
+    if not base:
+        options.update({
+            'noplaylist': True,
+            'ignoreerrors': 'only_download',
+            'extractor_args': {'youtube': {'skip': ['dash', 'hls']}},
+        })
+
+    return options
 # -----------------------
 # Background Task: Preview Cleanup
 # -----------------------
@@ -224,12 +303,16 @@ class DownloadThread(threading.Thread):
             # Copy options and add progress hook
             ydl_opts = self.options.copy()
             ydl_opts['progress_hooks'] = [self._progress_hook]
+            ydl_opts.update(get_ydl_options(base=True))
+
 
             # Register self in the active downloads dict
             with download_lock:
                 active_downloads[self.download_id] = self
 
             with YoutubeDL(ydl_opts) as self._ydl:
+                # Random delay before download
+                time.sleep(random.randint(2, 10))
                 info = self._ydl.extract_info(self.url, download=True)
 
                 # Check if the download was cancelled
@@ -341,6 +424,22 @@ class DownloadThread(threading.Thread):
                 except Exception as e:
                     app.logger.error(f"Cleanup error for {file_path}: {e}")
 
+
+# -----------------------
+# Request Middleware
+# -----------------------
+@app.before_request
+def randomize_request_pattern():
+    # Add random delay (0.5-3 seconds)
+    time.sleep(random.uniform(0.5, 3.0))
+    
+    # Randomize TLS fingerprint
+    os.environ['curl_ca_bundle'] = random.choice([
+        '/etc/ssl/certs/ca-certificates.crt',
+        '/usr/lib/ssl/cert.pem',
+        '/etc/pki/tls/certs/ca-bundle.crt'
+    ])
+
 # -----------------------
 # Routes and Endpoints
 # -----------------------
@@ -396,11 +495,13 @@ def get_info():
     Accepts JSON with key: url.
     """
     try:
+        raw_url = request.json.get('url')
         url = request.json.get('url')
         if not validate_url(url):
             return jsonify({'error': 'Invalid YouTube URL'}), 400
 
         app.logger.info(f"Fetching info for URL: {url}")
+        ydl_opts = get_ydl_options()
         ydl_opts = {
             'quiet': True,
             'no_warnings': False,
@@ -489,6 +590,7 @@ def start_download():
     app.logger.info(f"Starting download {download_id} for URL: {data.get('url')}")
 
     try:
+        ydl_opts = get_ydl_options()
         ydl_opts = {
             'outtmpl': os.path.join(DOWNLOAD_DIR, f'%(title)s_{download_id}.%(ext)s'),
             'quiet': True,
