@@ -39,8 +39,7 @@ A modern YouTube video and audio downloader web application with dark/light them
 ### After the download is complete, a message will appear confirming that the download has finished successfully.
 ![Feature Demo](screenshots/7.png)
 
-### 
-This interface features a dark mode and includes a "Download History" button, allowing you to view your recently downloaded videos.
+### This interface features a dark mode and includes a "Download History" button, allowing you to view your recently downloaded videos.
 ![Feature Demo](screenshots/8.png)
 
 ### Download History
