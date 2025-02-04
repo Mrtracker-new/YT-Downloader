@@ -56,10 +56,10 @@ A modern YouTube video and audio downloader web application with dark/light them
 - Node.js (for optional frontend build)
 
 ## Steps
-1. Clone the repository:
+Clone the repository:
 
-       git clone https://github.com/yourusername/youtube-premium-downloader.git
-       cd youtube-premium-downloader
+    git clone https://github.com/yourusername/youtube-premium-downloader.git
+    cd youtube-premium-downloader
 
 ## Install Python dependencies:
 
