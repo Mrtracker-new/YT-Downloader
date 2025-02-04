@@ -24,12 +24,19 @@ A modern YouTube video and audio downloader web application with dark/light them
 ![Feature Demo](screenshots/2.png)
 
 ![Feature Demo](screenshots/3.png)
+
 ![Feature Demo](screenshots/4.png)
+
 ![Feature Demo](screenshots/5.png)
+
 ![Feature Demo](screenshots/6.png)
+
 ![Feature Demo](screenshots/7.png)
+
 ![Feature Demo](screenshots/8.png)
+
 ![Feature Demo](screenshots/9.png)
+
 ![Feature Demo](screenshots/10.png)
 
 ## 🚀 Installation
