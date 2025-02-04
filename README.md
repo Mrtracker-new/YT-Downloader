@@ -24,22 +24,29 @@ A modern YouTube video and audio downloader web application with dark/light them
 ### After pasting the YouTube URL and clicking the "Analyze Video" button, the system will process the video details.
 ![Feature Demo](screenshots/2.png)
 
-### 
-The preview feature allows you to watch a preview of the video before downloading.
+### The preview feature allows you to watch a preview of the video before downloading.
 ![Feature Demo](screenshots/3.png)
 
+### Various video formats are available for selection, allowing you to choose the one that best suits your needs.
 ![Feature Demo](screenshots/4.png)
 
+### Different audio formats are available, allowing you to select the one that best fits your preferences.
 ![Feature Demo](screenshots/5.png)
 
+### Once the download starts, you can monitor the progress bar, real-time network speed, and estimated download time. Additionally, you can pause or resume the download using the pause/resume button or cancel it with the cancel button.
 ![Feature Demo](screenshots/6.png)
 
+### After the download is complete, a message will appear confirming that the download has finished successfully.
 ![Feature Demo](screenshots/7.png)
 
+### 
+This interface features a dark mode and includes a "Download History" button, allowing you to view your recently downloaded videos.
 ![Feature Demo](screenshots/8.png)
 
+### Download History
 ![Feature Demo](screenshots/9.png)
 
+### The website also offers a light mode for a brighter and visually comfortable experience.
 ![Feature Demo](screenshots/10.png)
 
 ## 🚀 Installation
