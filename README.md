@@ -32,39 +32,36 @@ A modern YouTube video and audio downloader web application with dark/light them
 
 ### Steps
 1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/youtube-premium-downloader.git
-cd youtube-premium-downloader
-Install Python dependencies:
 
-bash
-Copy
-pip install -r requirements.txt
-Install FFmpeg:
+       git clone https://github.com/yourusername/youtube-premium-downloader.git
+       cd youtube-premium-downloader
 
-bash
-Copy
+### Install Python dependencies:
+
+    pip install -r requirements.txt
+
+### Install FFmpeg:
+
 # For Ubuntu/Debian
-sudo apt install ffmpeg
+    sudo apt install ffmpeg
 
 # For Windows (using chocolatey)
-choco install ffmpeg
+    choco install ffmpeg
 
 # For MacOS
-brew install ffmpeg
-Create required directories:
+    brew install ffmpeg
 
-bash
-Copy
-mkdir -p previews static/images
-Start the application:
+# Create required directories:
 
-bash
-Copy
-python app.py
-Visit http://localhost:5000 in your browser to use the application!
+    mkdir -p previews static/images
 
-🛠️ Configuration
+# Start the application:
+
+    python app.py
+
+# Visit http://localhost:5000 in your browser to use the application!
+
+### 🛠️ Configuration
 Environment variables (optional):
 
 env
@@ -72,7 +69,8 @@ Copy
 DOWNLOAD_DIR=/path/to/downloads
 PREVIEW_DIR=/path/to/previews
 CUSTOM_FFMPEG_PATH=/path/to/ffmpeg
-📚 Usage
+
+### 📚 Usage
 Paste a YouTube URL in the input field
 
 Click "Analyze Video"
@@ -83,9 +81,9 @@ Start download
 
 Manage downloads through the history panel
 
-Usage Demo <!-- Add usage gif/screenshot here -->
+ <!-- Add usage gif/screenshot here -->
 
-🧰 Tech Stack
+### 🧰 Tech Stack
 Backend:
 
 Python 3
@@ -106,7 +104,7 @@ Font Awesome icons
 
 Responsive design
 
-❓ FAQ
+###❓ FAQ
 Q: Why am I getting "FFmpeg not found" errors?
 A: Ensure FFmpeg is installed and in your system PATH. See installation instructions.
 
@@ -116,7 +114,7 @@ A: Files are saved to your system's Downloads folder by default.
 Q: Can I download age-restricted content?
 A: The application follows YouTube's terms of service. Some content may not be downloadable.
 
-🤝 Contributing
+### 🤝 Contributing
 Contributions are welcome! Please follow these steps:
 
 Fork the project
@@ -129,34 +127,10 @@ Push to the branch (git push origin feature/AmazingFeature)
 
 Open a Pull Request
 
-📄 License
+### 📄 License
 Distributed under the MIT License. See LICENSE for more information.
 
-📬 Contact
+### 📬 Contact
 Rolan Lobo - @RolanLobo4 - rolanthelobo@gmail.com
 
 Project Link: https://github.com/yourusername/youtube-premium-downloader
-
-Copy
-
-To use this README:
-
-1. Create a `screenshots` directory in your project root
-2. Add your images (recommended sizes):
-   - `main-interface.png` (1280x720)
-   - `features.gif` (800x450)
-   - `usage.gif` (800x450)
-3. Update the contact information and GitHub links
-4. Add a LICENSE file (MIT recommended)
-
-The README includes:
-- Badges for key technologies
-- Clear installation instructions
-- Visual demonstrations
-- Feature list
-- Configuration options
-- Contribution guidelines
-- FAQ section
-- Contact information
-
-You might want to add actual screenshots of your application in action to make the README more engaging and informative.
