@@ -94,15 +94,15 @@ Environment variables (optional):
     CUSTOM_FFMPEG_PATH=/path/to/ffmpeg
 
 ## 📚 Usage
-Paste a YouTube URL in the input field
+- Paste a YouTube URL in the input field
 
-Click "Analyze Video"
+- Click "Analyze Video"
 
-Choose video/audio quality
+- Choose video/audio quality
 
-Start download
+- Start download
 
-Manage downloads through the history panel
+- Manage downloads through the history panel
 
  <!-- Add usage gif/screenshot here -->
 
