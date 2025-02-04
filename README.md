@@ -104,28 +104,26 @@ Environment variables (optional):
 
 - Manage downloads through the history panel
 
- <!-- Add usage gif/screenshot here -->
-
 ## 🧰 Tech Stack
 Backend:
 
-Python 3
+- Python 3
 
-Flask
+- Flask
 
-yt-dlp
+- yt-dlp
 
-FFmpeg
+- FFmpeg
 
 Frontend:
 
-Modern JavaScript (ES6+)
+- Modern JavaScript (ES6+)
 
-CSS3 with CSS Variables
+- CSS3 with CSS Variables
 
-Font Awesome icons
+- Font Awesome icons
 
-Responsive design
+- Responsive design
 
 ## ❓ FAQ
 Q: Why am I getting "FFmpeg not found" errors?
@@ -140,20 +138,20 @@ A: The application follows YouTube's terms of service. Some content may not be d
 ## 🤝 Contributing
 Contributions are welcome! Please follow these steps:
 
-Fork the project
+- Fork the project
 
-Create your feature branch (git checkout -b feature/AmazingFeature)
+- Create your feature branch (git checkout -b feature/AmazingFeature)
 
-Commit your changes (git commit -m 'Add some AmazingFeature')
+- Commit your changes (git commit -m 'Add some AmazingFeature')
 
-Push to the branch (git push origin feature/AmazingFeature)
+- Push to the branch (git push origin feature/AmazingFeature)
 
-Open a Pull Request
+- Open a Pull Request
 
 ## 📄 License
 Distributed under the MIT License. See LICENSE for more information.
 
 ## 📬 Contact
-Rolan Lobo - @RolanLobo4 - rolanthelobo@gmail.com
+Rolan Lobo - @RolanLobo4 - rolanlobo901@gmail.com
 
 Project Link: https://github.com/yourusername/youtube-premium-downloader
