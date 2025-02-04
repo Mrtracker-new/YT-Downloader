@@ -22,6 +22,7 @@ class YouTubeDownloader {
       document.getElementById('themeToggle').addEventListener('click', () => this.toggleTheme());
       document.getElementById('showHistory').addEventListener('click', () => this.toggleHistoryPanel());
       document.getElementById('urlInput').addEventListener('input', (e) => this.validateURL(e.target.value));
+      document.getElementById('cookieFile').addEventListener('change', (e) => this.handleCookieUpload(e));  
   
       // Delegate click events for dynamically added elements
       document.addEventListener('click', (e) => {
@@ -173,6 +174,32 @@ class YouTubeDownloader {
     // Preview Generation
     // ---------------------------
   
+    async handleCookieUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const statusElement = document.getElementById('cookieStatus');
+    statusElement.textContent = 'Uploading cookies...';
+    
+    try {
+        const formData = new FormData();
+        formData.append('cookies', file);
+
+        const response = await fetch('/api/upload-cookies', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Cookie upload failed');
+
+        statusElement.textContent = '✅ Cookies uploaded successfully';
+        setTimeout(() => statusElement.textContent = '', 3000);
+    } catch (error) {
+        statusElement.textContent = `❌ Error: ${error.message}`;
+        setTimeout(() => statusElement.textContent = '', 5000);
+    }
+}
     async generatePreview(type) {
       console.info(`Generating ${type} preview...`);
       try {
