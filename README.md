@@ -56,7 +56,7 @@ A modern YouTube video and audio downloader web application with dark/light them
 - Node.js (for optional frontend build)
 
 ## Steps
-Clone the repository:
+**Clone the repository**:
 
     git clone https://github.com/yourusername/youtube-premium-downloader.git
     cd youtube-premium-downloader
@@ -87,7 +87,7 @@ Clone the repository:
 ### Visit http://localhost:5000 in your browser to use the application!
 
 ## 🛠️ Configuration
-Environment variables (optional):
+**Environment variables (optional)**:
 
     DOWNLOAD_DIR=/path/to/downloads
     PREVIEW_DIR=/path/to/previews
@@ -115,7 +115,7 @@ Environment variables (optional):
 
 - FFmpeg
 
-Frontend:
+**Frontend**:
 
 - Modern JavaScript (ES6+)
 
@@ -136,7 +136,7 @@ Q: Can I download age-restricted content?
 A: The application follows YouTube's terms of service. Some content may not be downloadable.
 
 ## 🤝 Contributing
-Contributions are welcome! Please follow these steps:
+**Contributions are welcome! Please follow these steps**:
 
 - Fork the project
 
