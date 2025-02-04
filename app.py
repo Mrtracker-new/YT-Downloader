@@ -476,6 +476,8 @@ def start_download():
             'quiet': True,
             'noplaylist': True,
             'ffmpeg_location': FFMPEG_PATH,
+            'cookies': cookies_file,
+            
         }
 
         if data['type'] == 'audio':
