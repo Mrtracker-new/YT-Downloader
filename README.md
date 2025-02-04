@@ -6,7 +6,7 @@
 
 A modern YouTube video and audio downloader web application with dark/light themes, preview functionality, and download management.
 
-![App Screenshot](screenshots/main-interface.png) <!-- Add your main screenshot here -->
+![App Screenshot](screenshots/1.png) <!-- Add your main screenshot here -->
 
 ## ✨ Features
 
