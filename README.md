@@ -58,7 +58,7 @@ A modern YouTube video and audio downloader web application with dark/light them
 ## Steps
 **Clone the repository**:
 
-    git clone https://github.com/yourusername/youtube-premium-downloader.git
+    git clone https://github.com/Mrtracker-new/YT-Downloader.git
     cd YT-Downloader
 
 ## Install Python dependencies:
