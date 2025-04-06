@@ -3,23 +3,45 @@
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue?logo=python)](https://python.org)
 [![Flask](https://img.shields.io/badge/Flask-2.0%2B-lightgrey?logo=flask)](https://flask.palletsprojects.com/)
 [![yt-dlp](https://img.shields.io/badge/yt--dlp-Stable-brightgreen)](https://github.com/yt-dlp/yt-dlp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A modern YouTube video and audio downloader web application with dark/light themes, preview functionality, and download management.
+A modern YouTube video/audio downloader web application with theme support, preview functionality, and download management.
 
-![App Screenshot](screenshots/1.png) 
+![Application Interface](screenshots/1.png) *Main Application Interface*
+
+## 📋 Table of Contents
+- [Features](#-features)
+- [Installation](#-installation)
+- [Configuration](#-configuration)
+- [Technical Architecture](#-technical-architecture)
+- [Development](#-development)
+- [Contributing](#-contributing)
+- [License](#-license) 
 
 ## ✨ Features
 
+### 🎮 Core Functionality
 - 🌓 Dark/Light theme toggle
 - 🎬 Video/Audio preview generation
-- 📊 Download progress tracking
 - ⏯️ Pause/Resume downloads
 - 📥 Download history management
-- 🎨 Modern responsive UI
-- 📱 Mobile-friendly design
-- 🔒 Safe download management
+- 🔒 Secure download handling
+
+### 📊 Monitoring & Analytics
+- 📈 Real-time download statistics
+- 🚀 Network speed monitoring
+- ⏱️ Estimated time remaining
+- 📉 Progress visualization
+
+### 🖥️ Interface
+- 🎨 Modern responsive design
+- 📱 Mobile-optimized layout
 - 🎞️ Thumbnail previews
-- 📈 Real-time stats
+- 🌈 Theme customization
+
+![Feature Overview](screenshots/2.png) *Feature Demonstration*
+
+![Theme Comparison](screenshots/10.png) *Dark/Light Theme Comparison*
 
 ### After pasting the YouTube URL and clicking the "Analyze Video" button, the system will process the video details.
 ![Feature Demo](screenshots/2.png)
