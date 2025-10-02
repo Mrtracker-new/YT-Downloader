@@ -91,16 +91,21 @@ export const downloadVideo = async (req: Request, res: Response, next: NextFunct
     // Use absolute path in current working directory for consistency with yt-dlp
     const tempDir = process.env.TEMP_PATH || join(process.cwd(), 'temp');
     
+    logger.info(`[downloadVideo] Working directory: ${process.cwd()}`);
+    logger.info(`[downloadVideo] Temp directory (absolute): ${tempDir}`);
+    
     // Ensure temp directory exists
     if (!existsSync(tempDir)) {
+      logger.info(`[downloadVideo] Creating temp directory: ${tempDir}`);
       mkdirSync(tempDir, { recursive: true });
+    } else {
+      logger.info(`[downloadVideo] Temp directory already exists`);
     }
     
     const tempFile = join(tempDir, `${downloadId}-${filename}`);
     
     logger.info(`Starting download: ${filename} (ID: ${downloadId})`);
-    logger.info(`Temp directory: ${tempDir}`);
-    logger.info(`Temp file path: ${tempFile}`);
+    logger.info(`Temp file path (absolute): ${tempFile}`);
     
     // Initialize progress tracking
     downloadProgress.set(downloadId, { progress: 0, eta: 'Starting...', speed: '0' });
@@ -113,6 +118,12 @@ export const downloadVideo = async (req: Request, res: Response, next: NextFunct
       // Mark as complete
       downloadProgress.set(downloadId, { progress: 100, eta: '00:00', speed: 'Complete' });
       logger.info(`Download complete: ${downloadId}`);
+      logger.info(`[downloadVideo] Checking if file exists: ${tempFile}`);
+      logger.info(`[downloadVideo] File exists: ${existsSync(tempFile)}`);
+      if (existsSync(tempFile)) {
+        const stats = require('fs').statSync(tempFile);
+        logger.info(`[downloadVideo] File size: ${stats.size} bytes`);
+      }
       // Keep file available for 2 minutes after completion for retrieval
       setTimeout(() => {
         downloadProgress.delete(downloadId);
