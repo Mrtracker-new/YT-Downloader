@@ -17,7 +17,10 @@ export const getVideoInfo = async (req: Request, res: Response, next: NextFuncti
   try {
     const { url } = req.body;
 
+    logger.info(`Received getVideoInfo request for URL: ${url}`);
+
     if (!url) {
+      logger.error('No URL provided in request');
       return res.status(400).json({
         success: false,
         error: 'URL is required'
@@ -25,8 +28,10 @@ export const getVideoInfo = async (req: Request, res: Response, next: NextFuncti
     }
 
     // Validate video
+    logger.info('Validating video URL...');
     const isValid = await videoService.validateVideo(url);
     if (!isValid) {
+      logger.error(`Video validation failed for URL: ${url}`);
       return res.status(400).json({
         success: false,
         error: 'Invalid or unavailable YouTube video'
@@ -34,7 +39,9 @@ export const getVideoInfo = async (req: Request, res: Response, next: NextFuncti
     }
 
     // Get video info
+    logger.info('Fetching video info with yt-dlp...');
     const videoInfo = await videoService.getVideoInfo(url);
+    logger.info(`Successfully fetched video info: ${videoInfo.title}`);
 
     res.json({
       success: true,
@@ -42,6 +49,7 @@ export const getVideoInfo = async (req: Request, res: Response, next: NextFuncti
     });
   } catch (error) {
     logger.error('Error in getVideoInfo:', error);
+    logger.error('Error stack:', (error as Error).stack);
     next(error);
   }
 };
