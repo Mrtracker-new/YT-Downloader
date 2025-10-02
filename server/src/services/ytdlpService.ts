@@ -221,12 +221,9 @@ class YtDlpService {
         '--newline',  // Important: Output progress on new lines for parsing
         '--progress',  // Show progress
         '--prefer-ffmpeg',  // Prefer ffmpeg for merging video+audio
-        '--concurrent-fragments', '5',  // Download 5 fragments concurrently
-        '--buffer-size', '64K',  // Larger buffer for faster downloads
+        '--buffer-size', '16K',  // Moderate buffer size (safer than 64K)
         '--retries', '5',  // Retry failed downloads
-        '--fragment-retries', '5',  // Retry failed fragments
         '--no-call-home',  // Don't check for updates
-        '--no-mtime',  // Don't use Last-modified header for speed
         ...this.getCommonArgs(),
         '-o', outputPath
       ];
@@ -244,12 +241,13 @@ class YtDlpService {
         // Extract height from quality string (e.g., "720p" -> "720")
         const height = quality.replace('p', '');
         
-        // Prefer pre-merged MP4 formats (no ffmpeg needed), fallback to separate streams
-        // Priority: 1) Pre-merged MP4 with video+audio, 2) Best video+audio merge, 3) Best overall
-        const formatString = `best[height<=${height}][ext=mp4]/bestvideo[height<=${height}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=${height}]+bestaudio/best[height<=${height}]/best`;
+        // Simple, reliable format selection for playable videos
+        // Download best video+audio and merge properly
+        const formatString = `bestvideo[height<=${height}]+bestaudio/best[height<=${height}]`;
         
         args.push('-f', formatString);
-        args.push('--merge-output-format', 'mp4');  // Force output to MP4 format
+        args.push('--merge-output-format', 'mp4');  // Force merge to MP4
+        args.push('--postprocessor-args', 'ffmpeg:-movflags +faststart');  // Enable fast start for web playback
         console.log(`[ytdlpService] Downloading with format: ${formatString}`);
         logger.info(`Downloading with format: ${formatString}`);
       }
