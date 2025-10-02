@@ -25,7 +25,7 @@ const VideoInput: React.FC<VideoInputProps> = ({ onVideoInfo, onLoadingChange })
     onLoadingChange?.(true);
     
     // Show loading toast
-    const loadingToast = toast.loading('Fetching video info... This may take 10-30 seconds.');
+    const loadingToast = toast.loading('Fetching video info... This may take 30-60 seconds on first request.');
 
     try {
       const info = await getVideoInfo(url);
