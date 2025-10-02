@@ -45,6 +45,10 @@ class YtDlpService {
       const args = [
         '--dump-json',
         '--no-warnings',
+        // Use mobile web client to avoid bot detection
+        '--extractor-args', 'youtube:player_client=mweb',
+        // Add user agent to look like a real browser
+        '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
         url
       ];
 
@@ -137,6 +141,10 @@ class YtDlpService {
         '--no-playlist',
         '--newline',  // Important: Output progress on new lines for parsing
         '--progress',  // Show progress
+        // Use mobile web client to avoid bot detection
+        '--extractor-args', 'youtube:player_client=mweb',
+        // Add user agent to look like a real browser
+        '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
         '-o', outputPath
       ];
 
@@ -224,7 +232,14 @@ class YtDlpService {
    * Stream download directly to response
    */
   streamDownload(url: string, quality: string, audioOnly: boolean): any {
-    const args = ['--no-warnings', '--no-playlist', '-o', '-'];
+    const args = [
+      '--no-warnings',
+      '--no-playlist',
+      // Use mobile web client to avoid bot detection
+      '--extractor-args', 'youtube:player_client=mweb',
+      '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+      '-o', '-'
+    ];
 
     if (audioOnly) {
       args.push('-x', '--audio-format', 'mp3', '--audio-quality', '0');
