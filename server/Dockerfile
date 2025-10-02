@@ -6,10 +6,12 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     python3 \
     python3-pip \
+    python3-setuptools \
     && rm -rf /var/lib/apt/lists/*
 
-# Install yt-dlp
-RUN pip3 install --no-cache-dir yt-dlp
+# Upgrade pip and install yt-dlp
+RUN python3 -m pip install --upgrade pip setuptools wheel && \
+    python3 -m pip install --no-cache-dir yt-dlp
 
 # Set working directory
 WORKDIR /app
