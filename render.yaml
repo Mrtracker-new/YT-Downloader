@@ -1,0 +1,74 @@
+services:
+  # Backend API Service
+  - type: web
+    name: yt-downloader-backend
+    runtime: node
+    region: oregon  # Change to your preferred region: oregon, frankfurt, singapore, ohio
+    plan: free  # Change to 'starter' for production ($7/month, no spin-down)
+    rootDir: server
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: CORS_ORIGIN
+        sync: false  # You'll set this manually after frontend is deployed
+      - key: LOG_LEVEL
+        value: info
+      - key: STORAGE_PATH
+        value: ./downloads
+      - key: TEMP_PATH
+        value: ./temp
+      - key: MAX_FILE_SIZE
+        value: 2147483648
+      - key: FILE_RETENTION_HOURS
+        value: 24
+      - key: RATE_LIMIT_WINDOW_MS
+        value: 60000
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: 10
+      # Database connection (if you add PostgreSQL database)
+      # - key: DATABASE_URL
+      #   fromDatabase:
+      #     name: yt-downloader-db
+      #     property: connectionString
+
+  # Frontend Static Site
+  - type: web
+    name: yt-downloader-frontend
+    runtime: static
+    region: oregon  # Should match backend region for best performance
+    plan: free  # Static sites are always free on Render!
+    rootDir: client
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    pullRequestPreviewsEnabled: true  # Auto-deploy preview for PRs
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+    envVars:
+      - key: VITE_API_URL
+        sync: false  # You'll set this manually after backend is deployed
+
+# Optional: PostgreSQL Database
+# Uncomment if you want to add a database for download history
+# databases:
+#   - name: yt-downloader-db
+#     databaseName: youtube_downloader
+#     user: yt_user
+#     plan: free  # Free for 90 days, then $7/month
+#     region: oregon  # Should match your services region
+
+# Optional: Redis Cache
+# Note: Redis is not available on Render free tier
+# You'd need to use an external service like Redis Cloud (has free tier)
