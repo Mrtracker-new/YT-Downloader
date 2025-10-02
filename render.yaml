@@ -40,7 +40,6 @@ services:
   - type: web
     name: yt-downloader-frontend
     runtime: static
-    plan: free  # Static sites are always free on Render!
     rootDir: client
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
