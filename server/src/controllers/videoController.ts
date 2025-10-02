@@ -110,14 +110,14 @@ export const downloadVideo = async (req: Request, res: Response, next: NextFunct
       // Mark as complete
       downloadProgress.set(downloadId, { progress: 100, eta: '00:00', speed: 'Complete' });
       logger.info(`Download complete: ${downloadId}`);
-      // Keep in map for 5 seconds so frontend can see completion
+      // Keep file available for 2 minutes after completion for retrieval
       setTimeout(() => {
         downloadProgress.delete(downloadId);
         // Clean up temp file
         unlink(tempFile, (err) => {
           if (err) logger.error('Failed to delete temp file:', err);
         });
-      }, 5000);
+      }, 120000); // 2 minutes
     }).catch((error) => {
       logger.error(`Download failed: ${downloadId}`, error);
       downloadProgress.set(downloadId, { progress: 0, eta: 'Failed', speed: 'Error' });

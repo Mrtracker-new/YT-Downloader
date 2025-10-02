@@ -173,6 +173,10 @@ export const downloadVideo = async (
       });
     }
 
+    // Give the server a moment to finalize the file write
+    console.log('Download complete, waiting 2 seconds before retrieval...');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
     // Step 4: Retrieve the downloaded file
     const fileResponse = await fetch(`${API_BASE_URL}/api/video/file/${downloadId}`);
     
