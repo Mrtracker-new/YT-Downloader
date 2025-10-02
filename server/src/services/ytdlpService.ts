@@ -215,6 +215,7 @@ class YtDlpService {
         '--no-playlist',
         '--newline',  // Important: Output progress on new lines for parsing
         '--progress',  // Show progress
+        '--prefer-ffmpeg',  // Prefer ffmpeg for merging video+audio
         ...this.getCommonArgs(),
         '-o', outputPath
       ];
@@ -231,6 +232,9 @@ class YtDlpService {
         const formatString = `bestvideo[height<=${height}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=${height}]+bestaudio/best[height<=${height}]/best`;
         
         args.push('-f', formatString);
+        args.push('--merge-output-format', 'mp4');  // Force output to MP4 format
+        args.push('--remux-video', 'mp4');  // Remux to MP4 if needed
+        console.log(`[ytdlpService] Downloading with format: ${formatString}`);
         logger.info(`Downloading with format: ${formatString}`);
       }
 

@@ -6,7 +6,7 @@ services:
     region: oregon  # Change to your preferred region: oregon, frankfurt, singapore, ohio
     plan: free  # Change to 'starter' for production ($7/month, no spin-down)
     rootDir: server
-    buildCommand: pip install yt-dlp && npm install && npm run build
+    buildCommand: apt-get update && apt-get install -y ffmpeg && pip install yt-dlp && npm install && npm run build
     startCommand: npm start
     healthCheckPath: /health
     envVars:
