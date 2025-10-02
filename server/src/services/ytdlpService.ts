@@ -47,19 +47,19 @@ class YtDlpService {
 
       let output = '';
       let errorOutput = '';
-      const process = spawn(this.ytdlpPath, args);
+      const ytdlpProcess = spawn(this.ytdlpPath, args);
 
-      process.stdout.on('data', (data) => {
+      ytdlpProcess.stdout.on('data', (data) => {
         output += data.toString();
       });
 
-      process.stderr.on('data', (data) => {
+      ytdlpProcess.stderr.on('data', (data) => {
         const errMsg = data.toString();
         errorOutput += errMsg;
         logger.error('[ytdlpService] yt-dlp stderr:', errMsg);
       });
 
-      process.on('close', (code) => {
+      ytdlpProcess.on('close', (code) => {
         logger.info(`[ytdlpService] yt-dlp process closed with code: ${code}`);
         
         if (code === 0) {
@@ -96,7 +96,7 @@ class YtDlpService {
         }
       });
 
-      process.on('error', (error) => {
+      ytdlpProcess.on('error', (error) => {
         logger.error('[ytdlpService] Failed to spawn yt-dlp:', error);
         reject(new Error(`Failed to spawn yt-dlp: ${error.message}`));
       });
