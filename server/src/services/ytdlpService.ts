@@ -33,6 +33,8 @@ class YtDlpService {
     : 'yt-dlp';
   
   private cookiesFile: string | null = null;
+  private cache: Map<string, { data: YtDlpVideoInfo; timestamp: number }> = new Map();
+  private cacheTTL = 5 * 60 * 1000; // 5 minutes cache
 
   constructor() {
     // Initialize cookies from environment variable if available
@@ -93,6 +95,14 @@ class YtDlpService {
    * Get video information using yt-dlp
    */
   async getVideoInfo(url: string): Promise<YtDlpVideoInfo> {
+    // Check cache first
+    const cached = this.cache.get(url);
+    if (cached && Date.now() - cached.timestamp < this.cacheTTL) {
+      console.log(`[ytdlpService] Returning cached result for: ${url}`);
+      logger.info('Returning cached video info');
+      return Promise.resolve(cached.data);
+    }
+
     return new Promise((resolve, reject) => {
       console.log(`[ytdlpService] Getting video info for: ${url}`);
       console.log(`[ytdlpService] Using yt-dlp path: ${this.ytdlpPath}`);
@@ -104,6 +114,9 @@ class YtDlpService {
       const args = [
         '--dump-json',
         '--no-warnings',
+        '--no-check-certificates',  // Skip certificate validation for speed
+        '--skip-download',  // We're only getting info, not downloading
+        '--no-playlist',  // Don't process playlists for speed
         ...this.getCommonArgs(),
         url
       ];
@@ -150,6 +163,11 @@ class YtDlpService {
 
             console.log(`[ytdlpService] Successfully parsed video info: ${info.title}`);
             logger.info(`[ytdlpService] Successfully parsed video info: ${info.title}`);
+            
+            // Cache the result
+            this.cache.set(url, { data: videoInfo, timestamp: Date.now() });
+            console.log(`[ytdlpService] Cached result for: ${url}`);
+            
             resolve(videoInfo);
           } catch (error) {
             console.error('[ytdlpService] Failed to parse video info:', error);

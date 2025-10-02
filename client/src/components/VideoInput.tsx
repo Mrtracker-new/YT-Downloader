@@ -23,12 +23,17 @@ const VideoInput: React.FC<VideoInputProps> = ({ onVideoInfo, onLoadingChange })
 
     setLoading(true);
     onLoadingChange?.(true);
+    
+    // Show loading toast
+    const loadingToast = toast.loading('Fetching video info... This may take 10-30 seconds.');
 
     try {
       const info = await getVideoInfo(url);
+      toast.dismiss(loadingToast);
       onVideoInfo(info);
       toast.success('Video information loaded successfully!');
     } catch (error) {
+      toast.dismiss(loadingToast);
       toast.error((error as Error).message || 'Failed to fetch video information');
       console.error('Error fetching video info:', error);
     } finally {
