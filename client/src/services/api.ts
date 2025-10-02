@@ -81,7 +81,7 @@ export const downloadVideo = async (
   url: string, 
   quality: string, 
   audioOnly: boolean,
-  onProgress?: (progress: { progress: number; speed: string; eta: string }) => void
+  onProgress?: (progress: { progress: number; speed: string; eta: string; done?: boolean }) => void
 ): Promise<void> => {
   try {
     // Step 1: Start the download and get download ID
