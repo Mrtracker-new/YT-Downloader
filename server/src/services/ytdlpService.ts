@@ -35,6 +35,9 @@ class YtDlpService {
    */
   async getVideoInfo(url: string): Promise<YtDlpVideoInfo> {
     return new Promise((resolve, reject) => {
+      console.log(`[ytdlpService] Getting video info for: ${url}`);
+      console.log(`[ytdlpService] Using yt-dlp path: ${this.ytdlpPath}`);
+      console.log(`[ytdlpService] Platform: ${process.platform}`);
       logger.info(`[ytdlpService] Getting video info for: ${url}`);
       logger.info(`[ytdlpService] Using yt-dlp path: ${this.ytdlpPath}`);
       logger.info(`[ytdlpService] Platform: ${process.platform}`);
@@ -56,15 +59,18 @@ class YtDlpService {
       ytdlpProcess.stderr.on('data', (data) => {
         const errMsg = data.toString();
         errorOutput += errMsg;
+        console.error('[ytdlpService] yt-dlp stderr:', errMsg);
         logger.error('[ytdlpService] yt-dlp stderr:', errMsg);
       });
 
       ytdlpProcess.on('close', (code) => {
+        console.log(`[ytdlpService] yt-dlp process closed with code: ${code}`);
         logger.info(`[ytdlpService] yt-dlp process closed with code: ${code}`);
         
         if (code === 0) {
           try {
             if (!output || output.trim() === '') {
+              console.error('[ytdlpService] No output from yt-dlp');
               logger.error('[ytdlpService] No output from yt-dlp');
               reject(new Error('No output from yt-dlp'));
               return;
@@ -82,14 +88,19 @@ class YtDlpService {
               formats: info.formats || []
             };
 
+            console.log(`[ytdlpService] Successfully parsed video info: ${info.title}`);
             logger.info(`[ytdlpService] Successfully parsed video info: ${info.title}`);
             resolve(videoInfo);
           } catch (error) {
+            console.error('[ytdlpService] Failed to parse video info:', error);
+            console.error('[ytdlpService] Raw output:', output.substring(0, 500));
             logger.error('[ytdlpService] Failed to parse video info:', error);
             logger.error('[ytdlpService] Raw output:', output.substring(0, 500));
             reject(new Error('Failed to parse video info'));
           }
         } else {
+          console.error(`[ytdlpService] yt-dlp failed with code ${code}`);
+          console.error(`[ytdlpService] Error output: ${errorOutput}`);
           logger.error(`[ytdlpService] yt-dlp failed with code ${code}`);
           logger.error(`[ytdlpService] Error output: ${errorOutput}`);
           reject(new Error(`yt-dlp failed with code ${code}: ${errorOutput || 'No error message'}`));
@@ -97,6 +108,7 @@ class YtDlpService {
       });
 
       ytdlpProcess.on('error', (error) => {
+        console.error('[ytdlpService] Failed to spawn yt-dlp:', error);
         logger.error('[ytdlpService] Failed to spawn yt-dlp:', error);
         reject(new Error(`Failed to spawn yt-dlp: ${error.message}`));
       });
@@ -242,11 +254,14 @@ class YtDlpService {
    */
   async validateUrl(url: string): Promise<boolean> {
     try {
+      console.log(`[ytdlpService] Validating URL: ${url}`);
       logger.info(`[ytdlpService] Validating URL: ${url}`);
       await this.getVideoInfo(url);
+      console.log(`[ytdlpService] URL validation successful`);
       logger.info(`[ytdlpService] URL validation successful`);
       return true;
     } catch (error) {
+      console.error(`[ytdlpService] URL validation failed:`, error);
       logger.error(`[ytdlpService] URL validation failed:`, error);
       return false;
     }

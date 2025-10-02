@@ -37,9 +37,18 @@ app.use(errorHandler);
 
 // Start server
 app.listen(PORT, () => {
-  logger.info(`🚀 Server running on port ${PORT}`);
-  logger.info(`📝 Environment: ${process.env.NODE_ENV}`);
-  logger.info(`🌐 CORS enabled for: ${process.env.CORS_ORIGIN}`);
+  const startupMsg = `🚀 Server running on port ${PORT}`;
+  const envMsg = `📝 Environment: ${process.env.NODE_ENV || 'development'}`;
+  const corsMsg = `🌐 CORS enabled for: ${process.env.CORS_ORIGIN || '*'}`;
+  
+  // Use both console.log and logger to ensure visibility
+  console.log(startupMsg);
+  console.log(envMsg);
+  console.log(corsMsg);
+  
+  logger.info(startupMsg);
+  logger.info(envMsg);
+  logger.info(corsMsg);
 });
 
 export default app;
