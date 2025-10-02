@@ -5,7 +5,6 @@ import sanitize from 'sanitize-filename';
 import logger from '../utils/logger';
 import { createReadStream, unlink, readdirSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { tmpdir } from 'os';
 
 // Store for tracking download progress
 const downloadProgress = new Map<string, { progress: number; eta: string; speed: string }>();
