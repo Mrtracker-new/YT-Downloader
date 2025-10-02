@@ -1,17 +1,14 @@
-# Use official Node.js image as base
-FROM node:20-slim
+# Use official Node.js image (full version for better package support)
+FROM node:20
 
-# Install system dependencies including ffmpeg and Python
+# Install system dependencies including ffmpeg
 RUN apt-get update && apt-get install -y \
     ffmpeg \
-    python3 \
     python3-pip \
-    python3-setuptools \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip and install yt-dlp
-RUN python3 -m pip install --upgrade pip setuptools wheel && \
-    python3 -m pip install --no-cache-dir yt-dlp
+# Install yt-dlp using pip
+RUN pip3 install --break-system-packages yt-dlp
 
 # Set working directory
 WORKDIR /app
