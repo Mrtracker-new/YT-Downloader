@@ -40,7 +40,6 @@ services:
   - type: web
     name: yt-downloader-frontend
     runtime: static
-    region: oregon  # Should match backend region for best performance
     plan: free  # Static sites are always free on Render!
     rootDir: client
     buildCommand: npm install && npm run build
