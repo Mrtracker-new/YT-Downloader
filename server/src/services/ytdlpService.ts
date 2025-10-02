@@ -25,7 +25,10 @@ export interface YtDlpFormat {
 }
 
 class YtDlpService {
-  private ytdlpPath = 'C:\\Users\\rolan\\AppData\\Local\\Microsoft\\WinGet\\Links\\yt-dlp.exe';
+  // Use 'yt-dlp' on Linux/production, fallback to Windows path for local dev
+  private ytdlpPath = process.platform === 'win32' 
+    ? 'C:\\Users\\rolan\\AppData\\Local\\Microsoft\\WinGet\\Links\\yt-dlp.exe'
+    : 'yt-dlp';
 
   /**
    * Get video information using yt-dlp
