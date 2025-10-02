@@ -88,7 +88,8 @@ export const downloadVideo = async (req: Request, res: Response, next: NextFunct
     const downloadId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
     
     // Start download in background
-    const tempDir = process.env.TEMP_PATH || join(tmpdir(), 'yt-downloads');
+    // Use absolute path in current working directory for consistency with yt-dlp
+    const tempDir = process.env.TEMP_PATH || join(process.cwd(), 'temp');
     
     // Ensure temp directory exists
     if (!existsSync(tempDir)) {
@@ -166,7 +167,8 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
     }
     
     // Find the temp file
-    const tempDir = process.env.TEMP_PATH || join(tmpdir(), 'yt-downloads');
+    // Use same path as download function
+    const tempDir = process.env.TEMP_PATH || join(process.cwd(), 'temp');
     
     logger.info(`[getDownloadedFile] Looking for download ID: ${downloadId}`);
     logger.info(`[getDownloadedFile] Temp directory: ${tempDir}`);
