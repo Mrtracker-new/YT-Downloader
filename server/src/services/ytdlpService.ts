@@ -1,6 +1,6 @@
 import { spawn } from 'child_process';
 import { dirname } from 'path';
-import { mkdirSync, existsSync, writeFileSync, unlinkSync } from 'fs';
+import { mkdirSync, existsSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import logger from '../utils/logger';
