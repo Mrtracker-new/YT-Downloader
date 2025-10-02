@@ -2,12 +2,12 @@ services:
   # Backend API Service
   - type: web
     name: yt-downloader-backend
-    runtime: node
+    runtime: docker
     region: oregon  # Change to your preferred region: oregon, frankfurt, singapore, ohio
     plan: free  # Change to 'starter' for production ($7/month, no spin-down)
     rootDir: server
-    buildCommand: apt-get update && apt-get install -y ffmpeg && pip install yt-dlp && npm install && npm run build
-    startCommand: npm start
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV

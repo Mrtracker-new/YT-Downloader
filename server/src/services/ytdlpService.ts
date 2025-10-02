@@ -227,13 +227,12 @@ class YtDlpService {
         // Extract height from quality string (e.g., "720p" -> "720")
         const height = quality.replace('p', '');
         
-        // Format string: Download video at specified height with best audio, merge if needed
-        // Fallback to best available if specified quality not available
-        const formatString = `bestvideo[height<=${height}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=${height}]+bestaudio/best[height<=${height}]/best`;
+        // Prefer pre-merged MP4 formats (no ffmpeg needed), fallback to separate streams
+        // Priority: 1) Pre-merged MP4 with video+audio, 2) Best video+audio merge, 3) Best overall
+        const formatString = `best[height<=${height}][ext=mp4]/bestvideo[height<=${height}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=${height}]+bestaudio/best[height<=${height}]/best`;
         
         args.push('-f', formatString);
         args.push('--merge-output-format', 'mp4');  // Force output to MP4 format
-        args.push('--remux-video', 'mp4');  // Remux to MP4 if needed
         console.log(`[ytdlpService] Downloading with format: ${formatString}`);
         logger.info(`Downloading with format: ${formatString}`);
       }
