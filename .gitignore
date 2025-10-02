@@ -56,6 +56,7 @@ logs/
 *.sqlite3
 
 # Docker
+docker-compose.yml
 docker-compose.override.yml
 
 # Certificates and keys
