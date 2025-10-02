@@ -221,7 +221,13 @@ class YtDlpService {
       ];
 
       if (audioOnly) {
-        args.push('-x', '--audio-format', 'mp3', '--audio-quality', '0');
+        // Extract audio and convert to MP3
+        args.push('-x');  // Extract audio only
+        args.push('--audio-format', 'mp3');  // Convert to MP3
+        args.push('--audio-quality', '0');  // Best audio quality
+        args.push('--embed-thumbnail');  // Embed album art if available
+        console.log('[ytdlpService] Downloading audio as MP3');
+        logger.info('Downloading audio as MP3');
       } else {
         // Download video at specified quality
         // Extract height from quality string (e.g., "720p" -> "720")
