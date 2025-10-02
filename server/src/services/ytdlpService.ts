@@ -34,7 +34,7 @@ class YtDlpService {
   
   private cookiesFile: string | null = null;
   private cache: Map<string, { data: YtDlpVideoInfo; timestamp: number }> = new Map();
-  private cacheTTL = 5 * 60 * 1000; // 5 minutes cache
+  private cacheTTL = 3 * 60 * 1000; // 3 minutes cache (faster updates)
 
   constructor() {
     // Initialize cookies from environment variable if available
@@ -117,6 +117,11 @@ class YtDlpService {
         '--no-check-certificates',  // Skip certificate validation for speed
         '--skip-download',  // We're only getting info, not downloading
         '--no-playlist',  // Don't process playlists for speed
+        '--socket-timeout', '10',  // 10 second socket timeout
+        '--retries', '3',  // Only retry 3 times
+        '--fragment-retries', '3',  // Fragment retry limit
+        '--no-call-home',  // Don't check for updates
+        '--no-cache-dir',  // Don't use cache directory
         ...this.getCommonArgs(),
         url
       ];
@@ -216,6 +221,12 @@ class YtDlpService {
         '--newline',  // Important: Output progress on new lines for parsing
         '--progress',  // Show progress
         '--prefer-ffmpeg',  // Prefer ffmpeg for merging video+audio
+        '--concurrent-fragments', '5',  // Download 5 fragments concurrently
+        '--buffer-size', '64K',  // Larger buffer for faster downloads
+        '--retries', '5',  // Retry failed downloads
+        '--fragment-retries', '5',  // Retry failed fragments
+        '--no-call-home',  // Don't check for updates
+        '--no-mtime',  // Don't use Last-modified header for speed
         ...this.getCommonArgs(),
         '-o', outputPath
       ];
