@@ -4,7 +4,7 @@ import ytdlpService from '../services/ytdlpService';
 import sanitize from 'sanitize-filename';
 import logger from '../utils/logger';
 import { createReadStream, unlink, readdirSync, existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 
 // Store for tracking download progress
 const downloadProgress = new Map<string, { progress: number; eta: string; speed: string }>();
@@ -88,7 +88,7 @@ export const downloadVideo = async (req: Request, res: Response, next: NextFunct
     
     // Start download in background
     // Use absolute path in current working directory for consistency with yt-dlp
-    const tempDir = process.env.TEMP_PATH || join(process.cwd(), 'temp');
+    const tempDir = process.env.TEMP_PATH || resolve(process.cwd(), 'temp');
     
     logger.info(`[downloadVideo] Working directory: ${process.cwd()}`);
     logger.info(`[downloadVideo] Temp directory (absolute): ${tempDir}`);
@@ -178,7 +178,7 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
     
     // Find the temp file
     // Use same path as download function
-    const tempDir = process.env.TEMP_PATH || join(process.cwd(), 'temp');
+    const tempDir = process.env.TEMP_PATH || resolve(process.cwd(), 'temp');
     
     logger.info(`[getDownloadedFile] Looking for download ID: ${downloadId}`);
     logger.info(`[getDownloadedFile] Temp directory: ${tempDir}`);
