@@ -48,6 +48,7 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
   const [progress, setProgress] = useState(0);
   const [downloadSpeed, setDownloadSpeed] = useState('');
   const [eta, setEta] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
 
   // Extract available qualities
   const videoQualities = [
@@ -63,6 +64,7 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
     setProgress(0);
     setDownloadSpeed('');
     setEta('');
+    setStatusMessage('Starting download...');
     const toastId = toast.loading(audioOnly ? 'Downloading audio...' : 'Downloading video...');
 
     try {
@@ -74,10 +76,18 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
         setProgress(progressData.progress);
         setDownloadSpeed(progressData.speed);
         setEta(progressData.eta);
+        
+        // Update status message based on progress
+        if (progressData.progress >= 100 || progressData.done) {
+          setStatusMessage('Preparing your file...');
+        } else {
+          setStatusMessage('Downloading...');
+        }
       });
       
       toast.success('Download completed!', { id: toastId });
       setProgress(100);
+      setStatusMessage('');
     } catch (error) {
       toast.error((error as Error).message || 'Download failed', { id: toastId });
       console.error('Download error:', error);
@@ -87,6 +97,7 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
         setProgress(0);
         setDownloadSpeed('');
         setEta('');
+        setStatusMessage('');
       }, 2000);
     }
   };
@@ -208,7 +219,7 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
           },
         }}
       >
-        {downloading ? 'Downloading...' : `Download ${audioOnly ? 'Audio (MP3)' : `Video (${quality})`}`}
+        {downloading ? (statusMessage || 'Downloading...') : `Download ${audioOnly ? 'Audio (MP3)' : `Video (${quality})`}`}
       </Button>
 
       {/* Progress Bar */}
