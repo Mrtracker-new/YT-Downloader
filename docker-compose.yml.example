@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: yt-downloader-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: youtube_downloader
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: YOUR_POSTGRES_PASSWORD_HERE  # Change this!
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - yt-downloader-network
+
+  # Redis Cache & Queue
+  redis:
+    image: redis:7-alpine
+    container_name: yt-downloader-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - yt-downloader-network
+
+  # Backend API (uncomment when ready to dockerize)
+  # backend:
+  #   build:
+  #     context: ./server
+  #     dockerfile: Dockerfile
+  #   container_name: yt-downloader-backend
+  #   restart: unless-stopped
+  #   ports:
+  #     - "5000:5000"
+  #   environment:
+  #     NODE_ENV: development
+  #     PORT: 5000
+  #     DB_HOST: postgres
+  #     DB_PORT: 5432
+  #     DB_NAME: youtube_downloader
+  #     DB_USER: postgres
+  #     DB_PASSWORD: YOUR_POSTGRES_PASSWORD_HERE  # Must match above!
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: 6379
+  #   volumes:
+  #     - ./server:/app
+  #     - /app/node_modules
+  #     - ./downloads:/app/downloads
+  #   depends_on:
+  #     - postgres
+  #     - redis
+  #   networks:
+  #     - yt-downloader-network
+
+  # Frontend (uncomment when ready to dockerize)
+  # frontend:
+  #   build:
+  #     context: ./client
+  #     dockerfile: Dockerfile
+  #   container_name: yt-downloader-frontend
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     VITE_API_URL: http://localhost:5000
+  #   volumes:
+  #     - ./client:/app
+  #     - /app/node_modules
+  #   depends_on:
+  #     - backend
+  #   networks:
+  #     - yt-downloader-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  yt-downloader-network:
+    driver: bridge
