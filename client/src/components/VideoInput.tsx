@@ -6,7 +6,7 @@ import { getVideoInfo, VideoInfo } from '../services/api';
 
 interface VideoInputProps {
   onVideoInfo: (info: VideoInfo) => void;
-  onLoadingChange: (loading: boolean) => void;
+  onLoadingChange?: (loading: boolean) => void;
 }
 
 const VideoInput: React.FC<VideoInputProps> = ({ onVideoInfo, onLoadingChange }) => {
@@ -22,7 +22,7 @@ const VideoInput: React.FC<VideoInputProps> = ({ onVideoInfo, onLoadingChange })
     }
 
     setLoading(true);
-    onLoadingChange(true);
+    onLoadingChange?.(true);
 
     try {
       const info = await getVideoInfo(url);
@@ -33,7 +33,7 @@ const VideoInput: React.FC<VideoInputProps> = ({ onVideoInfo, onLoadingChange })
       console.error('Error fetching video info:', error);
     } finally {
       setLoading(false);
-      onLoadingChange(false);
+      onLoadingChange?.(false);
     }
   };
 
