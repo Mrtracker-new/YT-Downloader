@@ -73,3 +73,11 @@ SECURITY_AUDIT.md
 
 # ytdl-core debug files
 *-player-script.js
+
+# YouTube cookies (SENSITIVE - NEVER COMMIT)
+youtube_cookies.txt
+encode_cookies.ps1
+www.youtube.com_cookies.txt
+youtube_cookies_base64.txt
+*.cookies.txt
+cookies/

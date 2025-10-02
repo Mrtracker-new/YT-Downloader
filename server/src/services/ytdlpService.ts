@@ -1,6 +1,8 @@
 import { spawn } from 'child_process';
 import { dirname } from 'path';
-import { mkdirSync, existsSync } from 'fs';
+import { mkdirSync, existsSync, writeFileSync, unlinkSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import logger from '../utils/logger';
 
 export interface YtDlpVideoInfo {
@@ -29,6 +31,63 @@ class YtDlpService {
   private ytdlpPath = process.platform === 'win32' 
     ? 'C:\\Users\\rolan\\AppData\\Local\\Microsoft\\WinGet\\Links\\yt-dlp.exe'
     : 'yt-dlp';
+  
+  private cookiesFile: string | null = null;
+
+  constructor() {
+    // Initialize cookies from environment variable if available
+    this.initializeCookies();
+  }
+
+  /**
+   * Initialize cookies from base64-encoded environment variable
+   */
+  private initializeCookies(): void {
+    const cookiesBase64 = process.env.YOUTUBE_COOKIES_BASE64;
+    
+    if (cookiesBase64) {
+      try {
+        console.log('[ytdlpService] Found YOUTUBE_COOKIES_BASE64 environment variable');
+        
+        // Decode base64 cookies
+        const cookiesContent = Buffer.from(cookiesBase64, 'base64').toString('utf-8');
+        
+        // Create temporary cookies file
+        this.cookiesFile = join(tmpdir(), `yt-cookies-${Date.now()}.txt`);
+        writeFileSync(this.cookiesFile, cookiesContent, 'utf-8');
+        
+        console.log(`[ytdlpService] Cookies file created at: ${this.cookiesFile}`);
+        logger.info('YouTube cookies initialized successfully');
+      } catch (error) {
+        console.error('[ytdlpService] Failed to initialize cookies:', error);
+        logger.error('Failed to initialize YouTube cookies:', error);
+        this.cookiesFile = null;
+      }
+    } else {
+      console.log('[ytdlpService] No cookies found - using cookie-free mode');
+      logger.info('Running in cookie-free mode');
+    }
+  }
+
+  /**
+   * Get common yt-dlp arguments with optional cookies
+   */
+  private getCommonArgs(): string[] {
+    const args: string[] = [];
+    
+    // Add cookies if available
+    if (this.cookiesFile && existsSync(this.cookiesFile)) {
+      args.push('--cookies', this.cookiesFile);
+      console.log('[ytdlpService] Using cookies for authentication');
+    } else {
+      // Fallback to mobile web client if no cookies
+      args.push('--extractor-args', 'youtube:player_client=mweb');
+      args.push('--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36');
+      console.log('[ytdlpService] Using mobile web client (no cookies)');
+    }
+    
+    return args;
+  }
 
   /**
    * Get video information using yt-dlp
@@ -45,10 +104,7 @@ class YtDlpService {
       const args = [
         '--dump-json',
         '--no-warnings',
-        // Use mobile web client to avoid bot detection
-        '--extractor-args', 'youtube:player_client=mweb',
-        // Add user agent to look like a real browser
-        '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+        ...this.getCommonArgs(),
         url
       ];
 
@@ -141,10 +197,7 @@ class YtDlpService {
         '--no-playlist',
         '--newline',  // Important: Output progress on new lines for parsing
         '--progress',  // Show progress
-        // Use mobile web client to avoid bot detection
-        '--extractor-args', 'youtube:player_client=mweb',
-        // Add user agent to look like a real browser
-        '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+        ...this.getCommonArgs(),
         '-o', outputPath
       ];
 
@@ -235,9 +288,7 @@ class YtDlpService {
     const args = [
       '--no-warnings',
       '--no-playlist',
-      // Use mobile web client to avoid bot detection
-      '--extractor-args', 'youtube:player_client=mweb',
-      '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+      ...this.getCommonArgs(),
       '-o', '-'
     ];
 
