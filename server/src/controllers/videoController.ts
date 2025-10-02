@@ -259,6 +259,8 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
 export const getDownloadProgress = (req: Request, res: Response): void => {
   const { downloadId } = req.params;
 
+  logger.info(`[getDownloadProgress] Client connected for download ID: ${downloadId}`);
+
   // Set headers for SSE
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -271,8 +273,10 @@ export const getDownloadProgress = (req: Request, res: Response): void => {
     const progress = downloadProgress.get(downloadId);
     
     if (progress) {
+      logger.info(`[getDownloadProgress] Sending progress for ${downloadId}: ${progress.progress}%`);
       res.write(`data: ${JSON.stringify(progress)}\n\n`);
     } else {
+      logger.info(`[getDownloadProgress] Download ${downloadId} not found in progress map, sending completion`);
       // Download completed or doesn't exist
       res.write(`data: ${JSON.stringify({ progress: 100, eta: '00:00', speed: 'Complete', done: true })}\n\n`);
       clearInterval(interval);
