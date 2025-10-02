@@ -98,6 +98,8 @@ export const downloadVideo = async (req: Request, res: Response, next: NextFunct
     const tempFile = join(tempDir, `${downloadId}-${filename}`);
     
     logger.info(`Starting download: ${filename} (ID: ${downloadId})`);
+    logger.info(`Temp directory: ${tempDir}`);
+    logger.info(`Temp file path: ${tempFile}`);
     
     // Initialize progress tracking
     downloadProgress.set(downloadId, { progress: 0, eta: 'Starting...', speed: '0' });
@@ -166,8 +168,12 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
     // Find the temp file
     const tempDir = process.env.TEMP_PATH || join(tmpdir(), 'yt-downloads');
     
+    logger.info(`[getDownloadedFile] Looking for download ID: ${downloadId}`);
+    logger.info(`[getDownloadedFile] Temp directory: ${tempDir}`);
+    
     // Check if directory exists
     if (!existsSync(tempDir)) {
+      logger.error(`[getDownloadedFile] Directory does not exist: ${tempDir}`);
       return res.status(404).json({
         success: false,
         error: 'Download directory not found'
@@ -175,16 +181,21 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
     }
     
     const files = readdirSync(tempDir);
+    logger.info(`[getDownloadedFile] Files in directory: ${JSON.stringify(files)}`);
     const targetFile = files.find((f: string) => f.startsWith(downloadId));
     
     if (!targetFile) {
+      logger.error(`[getDownloadedFile] File not found for download ID: ${downloadId}`);
+      logger.error(`[getDownloadedFile] Available files: ${files.join(', ')}`);
       return res.status(404).json({
         success: false,
         error: 'Download not found or expired'
       });
     }
     
+    logger.info(`[getDownloadedFile] Found file: ${targetFile}`);
     const tempFile = join(tempDir, targetFile);
+    
     // Extract filename by skipping the downloadId prefix (timestamp-randomstring-filename)
     // Split by '-' and skip first 2 parts (timestamp and random string)
     const parts = targetFile.split('-');
