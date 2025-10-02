@@ -34,7 +34,13 @@
     "redis": "^4.6.11",
     "sanitize-filename": "^1.6.3",
     "uuid": "^9.0.1",
-    "winston": "^3.11.0"
+    "winston": "^3.11.0",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/fluent-ffmpeg": "^2.1.24",
+    "@types/node": "^20.10.5",
+    "@types/uuid": "^9.0.8",
+    "typescript": "^5.3.3"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

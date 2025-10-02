@@ -8,7 +8,6 @@ import { VideoInfo } from './services/api';
 
 function App() {
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
-  const [loading, setLoading] = useState(false);
 
   const theme = createTheme({
     palette: {
@@ -154,7 +153,6 @@ function App() {
           }}>
           <VideoInput 
             onVideoInfo={setVideoInfo}
-            onLoadingChange={setLoading}
           />
 
           {videoInfo && (
