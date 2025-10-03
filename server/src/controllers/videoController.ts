@@ -7,7 +7,7 @@ import { createReadStream, unlink, readdirSync, existsSync, mkdirSync } from 'fs
 import { join, resolve } from 'path';
 
 // Store for tracking download progress
-const downloadProgress = new Map<string, { progress: number; eta: string; speed: string }>();
+const downloadProgress = new Map<string, { progress: number; eta: string; speed: string; done: boolean }>();
 
 /**
  * Get video information
@@ -107,15 +107,15 @@ export const downloadVideo = async (req: Request, res: Response, next: NextFunct
     logger.info(`Temp file path (absolute): ${tempFile}`);
     
     // Initialize progress tracking
-    downloadProgress.set(downloadId, { progress: 0, eta: 'Starting...', speed: '0' });
+    downloadProgress.set(downloadId, { progress: 0, eta: 'Starting...', speed: '0', done: false });
     
     // Start download asynchronously
     ytdlpService.downloadVideo(url, quality, audioOnly, tempFile, (progress, eta, speed) => {
-      downloadProgress.set(downloadId, { progress, eta, speed });
+      downloadProgress.set(downloadId, { progress, eta, speed, done: false });
       logger.info(`[${downloadId}] Progress: ${progress}% - ETA: ${eta} - Speed: ${speed}`);
     }).then(() => {
-      // Mark as complete
-      downloadProgress.set(downloadId, { progress: 100, eta: '00:00', speed: 'Complete' });
+      // Mark as complete with done flag
+      downloadProgress.set(downloadId, { progress: 100, eta: '00:00', speed: 'Complete', done: true });
       logger.info(`Download complete: ${downloadId}`);
       logger.info(`[downloadVideo] Checking if file exists: ${tempFile}`);
       logger.info(`[downloadVideo] File exists: ${existsSync(tempFile)}`);
@@ -133,7 +133,7 @@ export const downloadVideo = async (req: Request, res: Response, next: NextFunct
       }, 120000); // 2 minutes
     }).catch((error) => {
       logger.error(`Download failed: ${downloadId}`, error);
-      downloadProgress.set(downloadId, { progress: 0, eta: 'Failed', speed: 'Error' });
+      downloadProgress.set(downloadId, { progress: 0, eta: 'Failed', speed: 'Error', done: false });
       setTimeout(() => downloadProgress.delete(downloadId), 5000);
       unlink(tempFile, () => {});
     });
