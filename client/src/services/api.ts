@@ -114,6 +114,7 @@ export const downloadVideo = async (
           onProgress(progressData);
           
           if (progressData.progress >= 100 || progressData.done) {
+            console.log('Download complete signal received, closing EventSource');
             progressComplete = true;
             eventSource.close();
           }
@@ -123,7 +124,13 @@ export const downloadVideo = async (
       };
       
       eventSource.onerror = (error) => {
-        console.error('EventSource error:', error);
+        console.log('EventSource closed or error occurred');
+        // If we already marked as complete, this is just a normal closure
+        if (progressComplete) {
+          console.log('EventSource closed after completion - this is normal');
+        } else {
+          console.error('EventSource error before completion:', error);
+        }
         eventSource.close();
       };
       

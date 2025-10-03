@@ -273,8 +273,15 @@ export const getDownloadProgress = (req: Request, res: Response): void => {
     const progress = downloadProgress.get(downloadId);
     
     if (progress) {
-      logger.info(`[getDownloadProgress] Sending progress for ${downloadId}: ${progress.progress}%`);
+      logger.info(`[getDownloadProgress] Sending progress for ${downloadId}: ${progress.progress}% (done: ${progress.done})`);
       res.write(`data: ${JSON.stringify(progress)}\n\n`);
+      
+      // Close connection if download is complete
+      if (progress.done) {
+        logger.info(`[getDownloadProgress] Download complete, closing SSE connection for ${downloadId}`);
+        clearInterval(interval);
+        res.end();
+      }
     } else {
       logger.info(`[getDownloadProgress] Download ${downloadId} not found in progress map, sending completion`);
       // Download completed or doesn't exist
