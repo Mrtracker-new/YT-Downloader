@@ -10,7 +10,7 @@ pnpm-debug.log*
 /dist
 /.next
 /out
-
+dist
 # Testing
 /coverage
 /.nyc_output
