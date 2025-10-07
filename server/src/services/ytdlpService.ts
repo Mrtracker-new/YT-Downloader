@@ -34,7 +34,8 @@ class YtDlpService {
   
   private cookiesFile: string | null = null;
   private cache: Map<string, { data: YtDlpVideoInfo; timestamp: number }> = new Map();
-  private cacheTTL = 3 * 60 * 1000; // 3 minutes cache (faster updates)
+  private cacheTTL = 10 * 60 * 1000; // 10 minutes cache (reduced API calls)
+  private pendingRequests: Map<string, Promise<YtDlpVideoInfo>> = new Map(); // Request deduplication
 
   constructor() {
     // Initialize cookies from environment variable if available
@@ -98,12 +99,21 @@ class YtDlpService {
     // Check cache first
     const cached = this.cache.get(url);
     if (cached && Date.now() - cached.timestamp < this.cacheTTL) {
-      console.log(`[ytdlpService] Returning cached result for: ${url}`);
+      console.log(`[ytdlpService] ⚡ Returning cached result (${Math.round((Date.now() - cached.timestamp) / 1000)}s old)`);
       logger.info('Returning cached video info');
       return Promise.resolve(cached.data);
     }
 
-    return new Promise((resolve, reject) => {
+    // Check if there's already a pending request for this URL (request deduplication)
+    const pending = this.pendingRequests.get(url);
+    if (pending) {
+      console.log(`[ytdlpService] ⏳ Returning pending request for: ${url}`);
+      logger.info('Returning pending request for same URL');
+      return pending;
+    }
+
+    // Create the promise and store it for deduplication
+    const requestPromise = new Promise<YtDlpVideoInfo>((resolve, reject) => {
       console.log(`[ytdlpService] Getting video info for: ${url}`);
       console.log(`[ytdlpService] Using yt-dlp path: ${this.ytdlpPath}`);
       console.log(`[ytdlpService] Platform: ${process.platform}`);
@@ -117,11 +127,14 @@ class YtDlpService {
         '--no-check-certificates',  // Skip certificate validation for speed
         '--skip-download',  // We're only getting info, not downloading
         '--no-playlist',  // Don't process playlists for speed
-        '--socket-timeout', '10',  // 10 second socket timeout
-        '--retries', '3',  // Only retry 3 times
-        '--fragment-retries', '3',  // Fragment retry limit
+        '--socket-timeout', '15',  // 15 second socket timeout (more reliable)
+        '--retries', '2',  // Only retry 2 times for speed
+        '--fragment-retries', '2',  // Fragment retry limit
         '--no-call-home',  // Don't check for updates
-        '--no-cache-dir',  // Don't use cache directory
+        '--flat-playlist',  // Faster playlist handling if applicable
+        '--skip-unavailable-fragments',  // Skip unavailable content
+        '--concurrent-fragments', '3',  // Parallel fragment downloads
+        '--throttled-rate', '100K',  // Minimum rate before retry (faster failure detection)
         ...this.getCommonArgs(),
         url
       ];
@@ -171,7 +184,14 @@ class YtDlpService {
             
             // Cache the result
             this.cache.set(url, { data: videoInfo, timestamp: Date.now() });
-            console.log(`[ytdlpService] Cached result for: ${url}`);
+            console.log(`[ytdlpService] ✅ Cached result for future requests`);
+            
+            // Clean up cache if it gets too large (keep last 50 entries)
+            if (this.cache.size > 50) {
+              const oldestKey = Array.from(this.cache.entries())
+                .sort((a, b) => a[1].timestamp - b[1].timestamp)[0][0];
+              this.cache.delete(oldestKey);
+            }
             
             resolve(videoInfo);
           } catch (error) {
@@ -193,9 +213,18 @@ class YtDlpService {
       ytdlpProcess.on('error', (error) => {
         console.error('[ytdlpService] Failed to spawn yt-dlp:', error);
         logger.error('[ytdlpService] Failed to spawn yt-dlp:', error);
+        this.pendingRequests.delete(url); // Clean up pending request
         reject(new Error(`Failed to spawn yt-dlp: ${error.message}`));
       });
+    })
+    .finally(() => {
+      // Always clean up pending request when done
+      this.pendingRequests.delete(url);
     });
+
+    // Store the pending request
+    this.pendingRequests.set(url, requestPromise);
+    return requestPromise;
   }
 
   /**
@@ -349,6 +378,65 @@ class YtDlpService {
     });
 
     return process.stdout;
+  }
+
+  /**
+   * Get quick basic video info (faster, minimal data)
+   * Only fetches essential information without all format details
+   */
+  async getQuickVideoInfo(url: string): Promise<Partial<YtDlpVideoInfo>> {
+    // Check cache first
+    const cached = this.cache.get(url);
+    if (cached && Date.now() - cached.timestamp < this.cacheTTL) {
+      return cached.data;
+    }
+
+    return new Promise((resolve, reject) => {
+      const args = [
+        '--dump-json',
+        '--no-warnings',
+        '--skip-download',
+        '--no-playlist',
+        '--socket-timeout', '10',
+        '--flat-playlist',  // Don't extract full playlist info
+        '--print-json',  // Print JSON immediately
+        ...this.getCommonArgs(),
+        url
+      ];
+
+      let output = '';
+      const ytdlpProcess = spawn(this.ytdlpPath, args);
+
+      ytdlpProcess.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+
+      ytdlpProcess.on('close', (code) => {
+        if (code === 0 && output) {
+          try {
+            const info = JSON.parse(output);
+            const quickInfo = {
+              id: info.id,
+              title: info.title,
+              uploader: info.uploader || info.channel || 'Unknown',
+              duration: info.duration || 0,
+              thumbnail: info.thumbnail || '',
+              description: (info.description || '').substring(0, 500), // Truncate description
+              formats: [], // Empty for quick fetch
+            };
+            resolve(quickInfo);
+          } catch (error) {
+            reject(new Error('Failed to parse quick video info'));
+          }
+        } else {
+          reject(new Error('Failed to fetch quick video info'));
+        }
+      });
+
+      ytdlpProcess.on('error', (error) => {
+        reject(error);
+      });
+    });
   }
 
   /**
