@@ -10,6 +10,43 @@ import { join, resolve } from 'path';
 const downloadProgress = new Map<string, { progress: number; eta: string; speed: string; done: boolean }>();
 
 /**
+ * Get quick video information (faster, basic info only)
+ */
+export const getQuickVideoInfo = async (req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
+  try {
+    const { url } = req.body;
+
+    console.log(`[getQuickVideoInfo] Received request for URL: ${url}`);
+    logger.info(`Received getQuickVideoInfo request for URL: ${url}`);
+
+    if (!url) {
+      console.error('[getQuickVideoInfo] No URL provided');
+      logger.error('No URL provided in request');
+      return res.status(400).json({
+        success: false,
+        error: 'URL is required'
+      });
+    }
+
+    // Get quick video info
+    console.log('[getQuickVideoInfo] Fetching quick video info...');
+    logger.info('Fetching quick video info...');
+    const quickInfo = await ytdlpService.getQuickVideoInfo(url);
+    console.log(`[getQuickVideoInfo] Successfully fetched: ${quickInfo.title}`);
+    logger.info(`Successfully fetched quick video info: ${quickInfo.title}`);
+
+    res.json({
+      success: true,
+      data: quickInfo
+    });
+  } catch (error) {
+    console.error('[getQuickVideoInfo] Error:', error);
+    logger.error('Error in getQuickVideoInfo:', error);
+    next(error);
+  }
+};
+
+/**
  * Get video information
  */
 export const getVideoInfo = async (req: Request, res: Response, next: NextFunction): Promise<Response | void> => {

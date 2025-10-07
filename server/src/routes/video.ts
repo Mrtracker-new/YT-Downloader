@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   getVideoInfo,
+  getQuickVideoInfo,
   downloadVideo,
   getQualityOptions,
   validateUrl,
@@ -9,6 +10,13 @@ import {
 } from '../controllers/videoController';
 
 const router = Router();
+
+/**
+ * @route   POST /api/video/quick-info
+ * @desc    Get quick video information (faster, basic info)
+ * @access  Public
+ */
+router.post('/quick-info', getQuickVideoInfo);
 
 /**
  * @route   POST /api/video/info
