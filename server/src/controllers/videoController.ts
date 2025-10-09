@@ -7,7 +7,7 @@ import { createReadStream, unlink, readdirSync, existsSync, mkdirSync } from 'fs
 import { join, resolve } from 'path';
 
 // Store for tracking download progress
-const downloadProgress = new Map<string, { progress: number; eta: string; speed: string; done: boolean }>();
+const downloadProgress = new Map<string, { progress: number; eta: string; speed: string; done: boolean; maxProgress: number }>();
 
 /**
  * Get quick video information (faster, basic info only)
@@ -144,15 +144,28 @@ export const downloadVideo = async (req: Request, res: Response, next: NextFunct
     logger.info(`Temp file path (absolute): ${tempFile}`);
     
     // Initialize progress tracking
-    downloadProgress.set(downloadId, { progress: 0, eta: 'Starting...', speed: '0', done: false });
+    downloadProgress.set(downloadId, { progress: 0, eta: 'Starting...', speed: '0', done: false, maxProgress: 0 });
     
     // Start download asynchronously
     ytdlpService.downloadVideo(url, quality, audioOnly, tempFile, (progress, eta, speed) => {
-      downloadProgress.set(downloadId, { progress, eta, speed, done: false });
-      logger.info(`[${downloadId}] Progress: ${progress}% - ETA: ${eta} - Speed: ${speed}`);
+      // Get current max progress to prevent backwards jumps (happens with multi-stream downloads)
+      const current = downloadProgress.get(downloadId);
+      const currentMax = current?.maxProgress || 0;
+      
+      // Only update if progress is moving forward, or if it's a new download phase
+      const finalProgress = Math.max(progress, currentMax);
+      
+      downloadProgress.set(downloadId, { 
+        progress: finalProgress, 
+        eta, 
+        speed, 
+        done: false,
+        maxProgress: finalProgress 
+      });
+      logger.info(`[${downloadId}] Progress: ${finalProgress}% (raw: ${progress}%) - ETA: ${eta} - Speed: ${speed}`);
     }).then(() => {
       // Mark as complete with done flag
-      downloadProgress.set(downloadId, { progress: 100, eta: '00:00', speed: 'Complete', done: true });
+      downloadProgress.set(downloadId, { progress: 100, eta: '00:00', speed: 'Complete', done: true, maxProgress: 100 });
       logger.info(`Download complete: ${downloadId}`);
       logger.info(`[downloadVideo] Checking if file exists: ${tempFile}`);
       logger.info(`[downloadVideo] File exists: ${existsSync(tempFile)}`);

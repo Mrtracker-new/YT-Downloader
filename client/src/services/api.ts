@@ -109,32 +109,28 @@ export const downloadVideo = async (
       let lastProgressTime = Date.now();
       
       eventSource.onopen = () => {
-        console.log('EventSource connection opened');
+        console.log('✅ Progress tracking connected');
       };
       
       eventSource.onmessage = (event) => {
         try {
           const progressData = JSON.parse(event.data);
-          console.log('Progress update:', progressData);
           lastProgressTime = Date.now();
           onProgress(progressData);
           
           if (progressData.progress >= 100 || progressData.done) {
-            console.log('Download complete signal received, closing EventSource');
+            console.log('✅ Download complete');
             progressComplete = true;
             eventSource.close();
           }
         } catch (error) {
-          console.error('Progress parsing error:', error);
+          console.error('❌ Progress parsing error:', error);
         }
       };
       
       eventSource.onerror = (error) => {
-        console.log('EventSource error/closed event');
-        
         // Check if we received the completion signal
         if (progressComplete) {
-          console.log('EventSource closed after completion - this is expected');
           eventSource.close();
           return;
         }
@@ -142,13 +138,13 @@ export const downloadVideo = async (
         // Check if we haven't received updates for a while but might be complete
         const timeSinceLastUpdate = Date.now() - lastProgressTime;
         if (timeSinceLastUpdate > 5000) {
-          console.log('No progress updates for 5 seconds, assuming download complete');
+          console.log('⚠️ Connection lost, checking completion status...');
           progressComplete = true;
           eventSource.close();
           return;
         }
         
-        console.error('EventSource error before completion:', error);
+        console.error('❌ Connection error:', error);
         // Don't immediately fail - the download might still be in progress
         // The polling mechanism below will handle checking completion
       };
