@@ -183,7 +183,7 @@ export const downloadVideo = async (req: Request, res: Response, next: NextFunct
       }, 120000); // 2 minutes
     }).catch((error) => {
       logger.error(`Download failed: ${downloadId}`, error);
-      downloadProgress.set(downloadId, { progress: 0, eta: 'Failed', speed: 'Error', done: false });
+      downloadProgress.set(downloadId, { progress: 0, eta: 'Failed', speed: 'Error', done: false, maxProgress: 0 });
       setTimeout(() => downloadProgress.delete(downloadId), 5000);
       unlink(tempFile, () => {});
     });
