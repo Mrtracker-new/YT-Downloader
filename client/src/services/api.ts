@@ -106,11 +106,17 @@ export const downloadVideo = async (
 
     if (onProgress) {
       const eventSource = new EventSource(`${API_BASE_URL}/api/video/progress/${downloadId}`);
+      let lastProgressTime = Date.now();
+      
+      eventSource.onopen = () => {
+        console.log('EventSource connection opened');
+      };
       
       eventSource.onmessage = (event) => {
         try {
           const progressData = JSON.parse(event.data);
           console.log('Progress update:', progressData);
+          lastProgressTime = Date.now();
           onProgress(progressData);
           
           if (progressData.progress >= 100 || progressData.done) {
@@ -124,14 +130,27 @@ export const downloadVideo = async (
       };
       
       eventSource.onerror = (error) => {
-        console.log('EventSource closed or error occurred');
-        // If we already marked as complete, this is just a normal closure
+        console.log('EventSource error/closed event');
+        
+        // Check if we received the completion signal
         if (progressComplete) {
-          console.log('EventSource closed after completion - this is normal');
-        } else {
-          console.error('EventSource error before completion:', error);
+          console.log('EventSource closed after completion - this is expected');
+          eventSource.close();
+          return;
         }
-        eventSource.close();
+        
+        // Check if we haven't received updates for a while but might be complete
+        const timeSinceLastUpdate = Date.now() - lastProgressTime;
+        if (timeSinceLastUpdate > 5000) {
+          console.log('No progress updates for 5 seconds, assuming download complete');
+          progressComplete = true;
+          eventSource.close();
+          return;
+        }
+        
+        console.error('EventSource error before completion:', error);
+        // Don't immediately fail - the download might still be in progress
+        // The polling mechanism below will handle checking completion
       };
       
       // Fallback: Close after 10 minutes

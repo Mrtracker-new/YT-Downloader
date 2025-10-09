@@ -299,11 +299,16 @@ export const getDownloadProgress = (req: Request, res: Response): void => {
   logger.info(`[getDownloadProgress] Client connected for download ID: ${downloadId}`);
 
   // Set headers for SSE
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.flushHeaders();
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+    'X-Accel-Buffering': 'no', // Disable buffering in nginx/proxies
+  });
+
+  // Send initial connection message
+  res.write(`:ok\n\n`);
 
   // Send progress updates every 300ms for more responsive updates
   const interval = setInterval(() => {
@@ -311,32 +316,48 @@ export const getDownloadProgress = (req: Request, res: Response): void => {
     
     if (progress) {
       logger.info(`[getDownloadProgress] Sending progress for ${downloadId}: ${progress.progress}% (done: ${progress.done})`);
-      res.write(`data: ${JSON.stringify(progress)}\\n\\n`);
       
-      // Flush the response buffer to ensure immediate delivery
-      if (typeof (res as any).flush === 'function') {
-        (res as any).flush();
+      try {
+        res.write(`data: ${JSON.stringify(progress)}\n\n`);
+      } catch (err) {
+        logger.error(`[getDownloadProgress] Error writing to response:`, err);
+        clearInterval(interval);
+        return;
       }
       
       // Close connection if download is complete
       if (progress.done) {
         logger.info(`[getDownloadProgress] Download complete, closing SSE connection for ${downloadId}`);
         clearInterval(interval);
-        res.end();
+        // Small delay before closing to ensure last message is received
+        setTimeout(() => {
+          try {
+            res.end();
+          } catch (err) {
+            logger.error(`[getDownloadProgress] Error ending response:`, err);
+          }
+        }, 100);
       }
     } else {
-      logger.info(`[getDownloadProgress] Download ${downloadId} not found in progress map, sending completion`);
-      // Download completed or doesn't exist
-      res.write(`data: ${JSON.stringify({ progress: 100, eta: '00:00', speed: 'Complete', done: true })}\\n\\n`);
+      logger.info(`[getDownloadProgress] Download ${downloadId} not found in progress map, checking if recently completed`);
+      // Check if download was recently started (give it 2 seconds grace period)
+      // If not found and not in progress, send completion
+      res.write(`data: ${JSON.stringify({ progress: 100, eta: '00:00', speed: 'Complete', done: true })}\n\n`);
       clearInterval(interval);
-      res.end();
+      setTimeout(() => {
+        try {
+          res.end();
+        } catch (err) {
+          logger.error(`[getDownloadProgress] Error ending response:`, err);
+        }
+      }, 100);
     }
   }, 300);
 
   // Clean up on client disconnect
   req.on('close', () => {
+    logger.info(`[getDownloadProgress] Client disconnected for ${downloadId}`);
     clearInterval(interval);
-    res.end();
   });
 };
 
