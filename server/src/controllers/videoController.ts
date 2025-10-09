@@ -305,13 +305,18 @@ export const getDownloadProgress = (req: Request, res: Response): void => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.flushHeaders();
 
-  // Send progress updates every 500ms
+  // Send progress updates every 300ms for more responsive updates
   const interval = setInterval(() => {
     const progress = downloadProgress.get(downloadId);
     
     if (progress) {
       logger.info(`[getDownloadProgress] Sending progress for ${downloadId}: ${progress.progress}% (done: ${progress.done})`);
-      res.write(`data: ${JSON.stringify(progress)}\n\n`);
+      res.write(`data: ${JSON.stringify(progress)}\\n\\n`);
+      
+      // Flush the response buffer to ensure immediate delivery
+      if (typeof (res as any).flush === 'function') {
+        (res as any).flush();
+      }
       
       // Close connection if download is complete
       if (progress.done) {
@@ -322,11 +327,11 @@ export const getDownloadProgress = (req: Request, res: Response): void => {
     } else {
       logger.info(`[getDownloadProgress] Download ${downloadId} not found in progress map, sending completion`);
       // Download completed or doesn't exist
-      res.write(`data: ${JSON.stringify({ progress: 100, eta: '00:00', speed: 'Complete', done: true })}\n\n`);
+      res.write(`data: ${JSON.stringify({ progress: 100, eta: '00:00', speed: 'Complete', done: true })}\\n\\n`);
       clearInterval(interval);
       res.end();
     }
-  }, 500);
+  }, 300);
 
   // Clean up on client disconnect
   req.on('close', () => {

@@ -147,7 +147,7 @@ export const downloadVideo = async (
             clearInterval(checkInterval);
             resolve(true);
           }
-        }, 500);
+        }, 100); // Check every 100ms for faster response
       });
     } else {
       // If no progress callback, just poll until download is done

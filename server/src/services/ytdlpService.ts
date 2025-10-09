@@ -249,6 +249,7 @@ class YtDlpService {
         '--no-playlist',
         '--newline',  // Important: Output progress on new lines for parsing
         '--progress',  // Show progress
+        '--console-title',  // Output progress to console
         '--prefer-ffmpeg',  // Prefer ffmpeg for merging video+audio
         '--buffer-size', '16K',  // Moderate buffer size (safer than 64K)
         '--retries', '5',  // Retry failed downloads
@@ -290,20 +291,45 @@ class YtDlpService {
 
       process.stdout.on('data', (data) => {
         const output = data.toString();
-        logger.info('yt-dlp:', output.trim());
+        const lines = output.split('\n');
         
-        // Parse progress information
-        if (onProgress) {
-          // Match progress pattern: [download]  45.2% of 10.5MiB at 2.3MiB/s ETA 00:03
-          const progressMatch = output.match(/\[download\]\s+(\d+\.?\d*)%/);
-          const etaMatch = output.match(/ETA\s+(\d+:\d+)/);
-          const speedMatch = output.match(/at\s+([\d\.]+[KMG]iB\/s)/);
+        // Process each line separately for better parsing
+        for (const line of lines) {
+          if (line.trim()) {
+            logger.info('yt-dlp:', line.trim());
+          }
           
-          if (progressMatch) {
-            const progress = parseFloat(progressMatch[1]);
-            const eta = etaMatch ? etaMatch[1] : 'Unknown';
-            const speed = speedMatch ? speedMatch[1] : 'Unknown';
-            onProgress(progress, eta, speed);
+          // Parse progress information
+          if (onProgress && line.includes('[download]')) {
+            // Match various progress patterns from yt-dlp:
+            // [download]  45.2% of 10.5MiB at 2.3MiB/s ETA 00:03
+            // [download] 100% of 10.5MiB in 00:05
+            const progressMatch = line.match(/\[download\]\s+(\d+\.?\d*)%/);
+            
+            if (progressMatch) {
+              const progress = parseFloat(progressMatch[1]);
+              
+              // Try to extract ETA (format: ETA 00:03 or in 00:05)
+              let eta = 'Unknown';
+              const etaMatch = line.match(/ETA\s+(\d+:\d+)/);
+              const inMatch = line.match(/in\s+(\d+:\d+)/);
+              if (etaMatch) {
+                eta = etaMatch[1];
+              } else if (inMatch) {
+                eta = '00:00'; // Already complete
+              }
+              
+              // Try to extract speed (format: at 2.3MiB/s)
+              let speed = 'Unknown';
+              const speedMatch = line.match(/at\s+([\d\.]+[KMG]iB\/s)/);
+              if (speedMatch) {
+                speed = speedMatch[1];
+              }
+              
+              // Log the parsed progress for debugging
+              console.log(`[ytdlpService] Parsed progress: ${progress}% | Speed: ${speed} | ETA: ${eta}`);
+              onProgress(progress, eta, speed);
+            }
           }
         }
       });
@@ -311,20 +337,41 @@ class YtDlpService {
       process.stderr.on('data', (data) => {
         stderr += data.toString();
         const output = data.toString();
-        const line = output.trim();
-        if (line) logger.info('yt-dlp:', line);
+        const lines = output.split('\n');
         
-        // Parse progress from stderr as well (yt-dlp sometimes outputs there)
-        if (onProgress) {
-          const progressMatch = output.match(/\[download\]\s+(\d+\.?\d*)%/);
-          const etaMatch = output.match(/ETA\s+(\d+:\d+)/);
-          const speedMatch = output.match(/at\s+([\d\.]+[KMG]iB\/s)/);
+        // Process each line separately for better parsing
+        for (const line of lines) {
+          if (line.trim()) {
+            logger.info('yt-dlp stderr:', line.trim());
+          }
           
-          if (progressMatch) {
-            const progress = parseFloat(progressMatch[1]);
-            const eta = etaMatch ? etaMatch[1] : 'Unknown';
-            const speed = speedMatch ? speedMatch[1] : 'Unknown';
-            onProgress(progress, eta, speed);
+          // Parse progress from stderr as well (yt-dlp sometimes outputs there)
+          if (onProgress && line.includes('[download]')) {
+            const progressMatch = line.match(/\[download\]\s+(\d+\.?\d*)%/);
+            
+            if (progressMatch) {
+              const progress = parseFloat(progressMatch[1]);
+              
+              // Try to extract ETA
+              let eta = 'Unknown';
+              const etaMatch = line.match(/ETA\s+(\d+:\d+)/);
+              const inMatch = line.match(/in\s+(\d+:\d+)/);
+              if (etaMatch) {
+                eta = etaMatch[1];
+              } else if (inMatch) {
+                eta = '00:00';
+              }
+              
+              // Try to extract speed
+              let speed = 'Unknown';
+              const speedMatch = line.match(/at\s+([\d\.]+[KMG]iB\/s)/);
+              if (speedMatch) {
+                speed = speedMatch[1];
+              }
+              
+              console.log(`[ytdlpService] Parsed progress (stderr): ${progress}% | Speed: ${speed} | ETA: ${eta}`);
+              onProgress(progress, eta, speed);
+            }
           }
         }
       });
