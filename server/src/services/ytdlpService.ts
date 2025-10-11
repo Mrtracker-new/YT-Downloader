@@ -288,9 +288,17 @@ class YtDlpService {
         args.push('-f', formatString);
         args.push('--merge-output-format', 'mp4');  // Force merge to MP4
         args.push('--recode-video', 'mp4');  // Recode to MP4 if needed
-        args.push('--postprocessor-args', 'ffmpeg:-c:v libx264 -c:a aac -movflags +faststart');  // Ensure MP4 with H.264 and AAC
+        // Ensure maximum compatibility with all devices:
+        // -c:v libx264: H.264 video codec (plays on everything)
+        // -c:a aac: AAC audio codec (universal support)
+        // -profile:v baseline: Compatible with older/mobile devices
+        // -level 3.0: Wide device compatibility
+        // -pix_fmt yuv420p: Standard color format for maximum compatibility
+        // -movflags +faststart: Enable streaming/web playback
+        args.push('--postprocessor-args', 'ffmpeg:-c:v libx264 -profile:v baseline -level 3.0 -pix_fmt yuv420p -c:a aac -movflags +faststart');
         console.log(`[ytdlpService] Downloading with format: ${formatString}`);
-        logger.info(`Downloading with format: ${formatString}`);
+        logger.info(`Downloading with format: ${formatString} (universal compatibility mode)`);
+        logger.info('Video will be compatible with: Windows, Mac, iOS, Android, Web browsers, Smart TVs');
       }
 
       args.push(url);
