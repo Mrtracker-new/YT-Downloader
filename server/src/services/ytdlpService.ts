@@ -263,8 +263,8 @@ class YtDlpService {
         '--concurrent-fragments', '5',  // Download 5 fragments in parallel
         '--throttled-rate', '100K',  // Minimum download rate threshold
         '--no-part',  // Don't use .part files (slightly faster)
-        ...this.getCommonArgs(),
-        '-o', outputPath
+        '--no-mtime',  // Don't copy mtime
+        ...this.getCommonArgs()
       ];
 
       if (audioOnly) {
@@ -289,22 +289,17 @@ class YtDlpService {
         
         args.push('-f', formatString);
         args.push('--merge-output-format', 'mp4');  // Force merge to MP4
-        args.push('--recode-video', 'mp4');  // Always recode to MP4
-        args.push('--no-keep-video');  // Delete separate streams after merge
+        args.push('--remux-video', 'mp4');  // Remux to MP4 container
         args.push('--add-metadata');  // Add metadata for better compatibility
-        // Force conversion to MP4 with Windows Media Player compatibility
-        // We MUST re-encode to ensure MP4 output (not WebM)
-        // -c:v libx264: Re-encode video to H.264 (universal)
-        // -c:a aac: Re-encode audio to AAC (universal)
-        // -pix_fmt yuv420p: Color format for Windows Media Player
-        // -crf 23: Good quality (lower = better, 18-28 is reasonable)
-        // -preset fast: Fast encoding
-        args.push('--postprocessor-args', 'ffmpeg:-c:v libx264 -crf 23 -preset fast -c:a aac -b:a 192k -pix_fmt yuv420p -movflags +faststart');
+        // Use ffmpeg to merge properly and keep as MP4
+        args.push('--postprocessor-args', 'ffmpeg:-c copy -movflags +faststart');
         console.log(`[ytdlpService] Downloading with format: ${formatString}`);
-        logger.info(`Downloading with format: ${formatString} (Converting to MP4 for Windows)`);
-        logger.info('Video will be re-encoded to MP4 and play in Windows Media Player');
+        logger.info(`Downloading with format: ${formatString} (MP4 output)`);
+        logger.info('Video will be merged to MP4 and play in Windows Media Player');
       }
 
+      // Add output path and URL at the end
+      args.push('-o', outputPath);
       args.push(url);
 
       logger.info(`Starting yt-dlp download to: ${outputPath}`);
