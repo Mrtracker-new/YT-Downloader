@@ -4,11 +4,18 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 60000, // 60 seconds - allows time for cookie authentication with YouTube
+  timeout: 90000, // 90 seconds - increased for large videos
   headers: {
     'Content-Type': 'application/json',
   },
+  // Enable HTTP keep-alive for connection reuse
+  maxRedirects: 5,
+  validateStatus: (status) => status >= 200 && status < 500,
 });
+
+// Request cache for deduplication
+const requestCache = new Map<string, Promise<any>>();
+const cacheTimeout = 5000; // Cache identical requests for 5 seconds
 
 export interface VideoInfo {
   videoId: string;
@@ -38,14 +45,63 @@ export interface ApiResponse<T> {
 }
 
 /**
- * Get video information
+ * Get quick video preview (faster, minimal data)
+ */
+export const getQuickVideoInfo = async (url: string): Promise<Partial<VideoInfo>> => {
+  const cacheKey = `quick:${url}`;
+  
+  // Check if there's already a pending request for this URL
+  const cached = requestCache.get(cacheKey);
+  if (cached) {
+    console.log('⚡ Returning cached quick preview for:', url);
+    return cached;
+  }
+  
+  // Create new request and cache it
+  const requestPromise = api.post<ApiResponse<Partial<VideoInfo>>>('/api/video/quick-info', { url })
+    .then(response => {
+      if (!response.data.success || !response.data.data) {
+        throw new Error(response.data.error || 'Failed to fetch quick video info');
+      }
+      return response.data.data;
+    })
+    .finally(() => {
+      // Remove from cache after timeout
+      setTimeout(() => requestCache.delete(cacheKey), cacheTimeout);
+    });
+  
+  requestCache.set(cacheKey, requestPromise);
+  return requestPromise;
+};
+
+/**
+ * Get video information with request deduplication
  */
 export const getVideoInfo = async (url: string): Promise<VideoInfo> => {
-  const response = await api.post<ApiResponse<VideoInfo>>('/api/video/info', { url });
-  if (!response.data.success || !response.data.data) {
-    throw new Error(response.data.error || 'Failed to fetch video info');
+  const cacheKey = `info:${url}`;
+  
+  // Check if there's already a pending request for this URL
+  const cached = requestCache.get(cacheKey);
+  if (cached) {
+    console.log('⚡ Returning cached/pending request for:', url);
+    return cached;
   }
-  return response.data.data;
+  
+  // Create new request and cache it
+  const requestPromise = api.post<ApiResponse<VideoInfo>>('/api/video/info', { url })
+    .then(response => {
+      if (!response.data.success || !response.data.data) {
+        throw new Error(response.data.error || 'Failed to fetch video info');
+      }
+      return response.data.data;
+    })
+    .finally(() => {
+      // Remove from cache after timeout
+      setTimeout(() => requestCache.delete(cacheKey), cacheTimeout);
+    });
+  
+  requestCache.set(cacheKey, requestPromise);
+  return requestPromise;
 };
 
 /**
