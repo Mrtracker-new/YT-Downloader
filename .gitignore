@@ -44,6 +44,7 @@ desktop.ini
 downloads/
 temp/
 tmp/
+docs_ignore/
 *.tmp
 
 # Logs
