@@ -34,8 +34,10 @@ class YtDlpService {
   
   private cookiesFile: string | null = null;
   private cache: Map<string, { data: YtDlpVideoInfo; timestamp: number }> = new Map();
-  private cacheTTL = 10 * 60 * 1000; // 10 minutes cache (reduced API calls)
+  private cacheTTL = 15 * 60 * 1000; // 15 minutes cache for better performance
   private pendingRequests: Map<string, Promise<YtDlpVideoInfo>> = new Map(); // Request deduplication
+  private quickInfoCache: Map<string, { data: Partial<YtDlpVideoInfo>; timestamp: number }> = new Map(); // Separate cache for quick info
+  private quickInfoTTL = 5 * 60 * 1000; // 5 minutes for quick info
 
   constructor() {
     // Initialize cookies from environment variable if available
@@ -127,14 +129,16 @@ class YtDlpService {
         '--no-check-certificates',  // Skip certificate validation for speed
         '--skip-download',  // We're only getting info, not downloading
         '--no-playlist',  // Don't process playlists for speed
-        '--socket-timeout', '15',  // 15 second socket timeout (more reliable)
-        '--retries', '2',  // Only retry 2 times for speed
-        '--fragment-retries', '2',  // Fragment retry limit
+        '--socket-timeout', '10',  // Reduced to 10 seconds for faster failures
+        '--retries', '1',  // Only retry once for speed (was 2)
+        '--extractor-retries', '1',  // Limit extractor retries
+        '--fragment-retries', '1',  // Reduced fragment retries
         '--no-call-home',  // Don't check for updates
         '--flat-playlist',  // Faster playlist handling if applicable
         '--skip-unavailable-fragments',  // Skip unavailable content
-        '--concurrent-fragments', '3',  // Parallel fragment downloads
-        '--throttled-rate', '100K',  // Minimum rate before retry (faster failure detection)
+        '--lazy-playlist',  // Don't extract playlist info upfront
+        '--geo-bypass',  // Bypass geo-restrictions faster
+        '--no-check-formats',  // Skip format checking for speed
         ...this.getCommonArgs(),
         url
       ];
@@ -251,9 +255,14 @@ class YtDlpService {
         '--progress',  // Show progress
         '--console-title',  // Output progress to console
         '--prefer-ffmpeg',  // Prefer ffmpeg for merging video+audio
-        '--buffer-size', '16K',  // Moderate buffer size (safer than 64K)
-        '--retries', '5',  // Retry failed downloads
+        '--buffer-size', '32K',  // Optimized buffer size for speed
+        '--http-chunk-size', '10M',  // Download in larger chunks (faster)
+        '--retries', '3',  // Retry failed downloads
+        '--fragment-retries', '3',  // Retry failed fragments
         '--no-call-home',  // Don't check for updates
+        '--concurrent-fragments', '5',  // Download 5 fragments in parallel
+        '--throttled-rate', '100K',  // Minimum download rate threshold
+        '--no-part',  // Don't use .part files (slightly faster)
         ...this.getCommonArgs(),
         '-o', outputPath
       ];
@@ -432,7 +441,14 @@ class YtDlpService {
    * Only fetches essential information without all format details
    */
   async getQuickVideoInfo(url: string): Promise<Partial<YtDlpVideoInfo>> {
-    // Check cache first
+    // Check quick info cache first
+    const quickCached = this.quickInfoCache.get(url);
+    if (quickCached && Date.now() - quickCached.timestamp < this.quickInfoTTL) {
+      console.log(`[ytdlpService] ⚡ Returning cached quick info (${Math.round((Date.now() - quickCached.timestamp) / 1000)}s old)`);
+      return Promise.resolve(quickCached.data);
+    }
+
+    // Check full cache as fallback
     const cached = this.cache.get(url);
     if (cached && Date.now() - cached.timestamp < this.cacheTTL) {
       return cached.data;
@@ -444,8 +460,13 @@ class YtDlpService {
         '--no-warnings',
         '--skip-download',
         '--no-playlist',
-        '--socket-timeout', '10',
+        '--socket-timeout', '8',  // Aggressive 8 second timeout
+        '--retries', '1',  // Only one retry
+        '--extractor-retries', '1',
         '--flat-playlist',  // Don't extract full playlist info
+        '--lazy-playlist',  // Even faster playlist handling
+        '--no-check-formats',  // Skip format validation
+        '--geo-bypass',  // Quick geo-bypass
         '--print-json',  // Print JSON immediately
         ...this.getCommonArgs(),
         url
@@ -471,6 +492,18 @@ class YtDlpService {
               description: (info.description || '').substring(0, 500), // Truncate description
               formats: [], // Empty for quick fetch
             };
+            
+            // Cache the quick info result
+            this.quickInfoCache.set(url, { data: quickInfo, timestamp: Date.now() });
+            console.log(`[ytdlpService] ✅ Cached quick info for future requests`);
+            
+            // Clean up quick info cache if it gets too large (keep last 100 entries)
+            if (this.quickInfoCache.size > 100) {
+              const oldestKey = Array.from(this.quickInfoCache.entries())
+                .sort((a, b) => a[1].timestamp - b[1].timestamp)[0][0];
+              this.quickInfoCache.delete(oldestKey);
+            }
+            
             resolve(quickInfo);
           } catch (error) {
             reject(new Error('Failed to parse quick video info'));
