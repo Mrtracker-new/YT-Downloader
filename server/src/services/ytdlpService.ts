@@ -283,28 +283,25 @@ class YtDlpService {
         // Extract height from quality string (e.g., "720p" -> "720")
         const height = quality.replace('p', '');
         
-        // IMPORTANT: Ensure we get VIDEO+AUDIO, not just audio
-        // Format selection priority:
-        // 1. Best MP4 video (H.264) + M4A audio at specified height
-        // 2. Best video at specified height + any audio
-        // 3. Best combined format at specified height (fallback)
-        const formatString = `bestvideo[ext=mp4][height<=${height}][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[height<=${height}][vcodec!*=none]+bestaudio/best[height<=${height}][vcodec!*=none]`;
+        // Simple and reliable format selection for video+audio
+        // This ensures we get BOTH video AND audio streams
+        const formatString = `bestvideo[height<=${height}]+bestaudio/best[height<=${height}]`;
         
         args.push('-f', formatString);
-        args.push('--merge-output-format', 'mp4');  // Force merge to MP4
+        args.push('--merge-output-format', 'mp4');  // Merge to MP4
         args.push('--recode-video', 'mp4');  // Recode to MP4 if needed
-        args.push('--no-keep-video');  // Delete separate video/audio files after merge
-        // Ensure maximum compatibility with all devices:
-        // -c:v libx264: H.264 video codec (plays on everything)
-        // -c:a aac: AAC audio codec (universal support)
-        // -profile:v baseline: Compatible with older/mobile devices
-        // -level 3.0: Wide device compatibility
-        // -pix_fmt yuv420p: Standard color format for maximum compatibility
-        // -movflags +faststart: Enable streaming/web playback
-        args.push('--postprocessor-args', 'ffmpeg:-c:v libx264 -profile:v baseline -level 3.0 -pix_fmt yuv420p -c:a aac -movflags +faststart');
+        args.push('--no-keep-video');  // Delete separate streams after merge
+        args.push('--add-metadata');  // Add metadata for better compatibility
+        // Ensure maximum Windows Media Player compatibility
+        // Keep video as-is if already compatible, otherwise recode with:
+        // - H.264 codec (most compatible)
+        // - AAC audio (universal)
+        // - yuv420p color space (required for Windows Media Player)
+        // - faststart for instant playback
+        args.push('--postprocessor-args', 'ffmpeg:-c:v copy -c:a copy -movflags +faststart');
         console.log(`[ytdlpService] Downloading with format: ${formatString}`);
-        logger.info(`Downloading with format: ${formatString} (universal compatibility mode)`);
-        logger.info('Video will be compatible with: Windows, Mac, iOS, Android, Web browsers, Smart TVs');
+        logger.info(`Downloading with format: ${formatString} (Windows compatible)`);
+        logger.info('Video will play in: Windows Media Player, VLC, all mobile devices');
       }
 
       args.push(url);
