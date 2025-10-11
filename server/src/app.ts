@@ -16,13 +16,28 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(helmet()); // Security headers
-app.use(compression()); // Gzip compression for faster responses
+
+// Enhanced compression for better performance
+app.use(compression({ 
+  level: 6, // Balance between speed and compression ratio
+  threshold: 1024, // Only compress responses > 1KB
+  filter: (req, res) => {
+    // Don't compress SSE or video streams
+    if (req.path.includes('/progress/') || req.path.includes('/file/')) {
+      return false;
+    }
+    return compression.filter(req, res);
+  }
+}));
+
 app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
-  credentials: true
+  credentials: true,
+  maxAge: 86400 // Cache preflight requests for 24 hours
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+app.use(express.json({ limit: '10mb' })); // Increase limit for large requests
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Rate limiting
 app.use(rateLimiter);
