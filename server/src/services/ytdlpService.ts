@@ -288,20 +288,21 @@ class YtDlpService {
         const formatString = `bestvideo[height<=${height}]+bestaudio/best[height<=${height}]`;
         
         args.push('-f', formatString);
-        args.push('--merge-output-format', 'mp4');  // Merge to MP4
-        args.push('--recode-video', 'mp4');  // Recode to MP4 if needed
+        args.push('--merge-output-format', 'mp4');  // Force merge to MP4
+        args.push('--recode-video', 'mp4');  // Always recode to MP4
         args.push('--no-keep-video');  // Delete separate streams after merge
         args.push('--add-metadata');  // Add metadata for better compatibility
-        // Ensure maximum Windows Media Player compatibility
-        // Keep video as-is if already compatible, otherwise recode with:
-        // - H.264 codec (most compatible)
-        // - AAC audio (universal)
-        // - yuv420p color space (required for Windows Media Player)
-        // - faststart for instant playback
-        args.push('--postprocessor-args', 'ffmpeg:-c:v copy -c:a copy -movflags +faststart');
+        // Force conversion to MP4 with Windows Media Player compatibility
+        // We MUST re-encode to ensure MP4 output (not WebM)
+        // -c:v libx264: Re-encode video to H.264 (universal)
+        // -c:a aac: Re-encode audio to AAC (universal)
+        // -pix_fmt yuv420p: Color format for Windows Media Player
+        // -crf 23: Good quality (lower = better, 18-28 is reasonable)
+        // -preset fast: Fast encoding
+        args.push('--postprocessor-args', 'ffmpeg:-c:v libx264 -crf 23 -preset fast -c:a aac -b:a 192k -pix_fmt yuv420p -movflags +faststart');
         console.log(`[ytdlpService] Downloading with format: ${formatString}`);
-        logger.info(`Downloading with format: ${formatString} (Windows compatible)`);
-        logger.info('Video will play in: Windows Media Player, VLC, all mobile devices');
+        logger.info(`Downloading with format: ${formatString} (Converting to MP4 for Windows)`);
+        logger.info('Video will be re-encoded to MP4 and play in Windows Media Player');
       }
 
       args.push(url);
