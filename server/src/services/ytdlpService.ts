@@ -273,6 +273,7 @@ class YtDlpService {
         args.push('--audio-format', 'mp3');  // Convert to MP3
         args.push('--audio-quality', '0');  // Best audio quality
         args.push('--embed-thumbnail');  // Embed album art if available
+        args.push('--postprocessor-args', 'ffmpeg:-ar 44100');  // Standard audio sampling rate
         console.log('[ytdlpService] Downloading audio as MP3');
         logger.info('Downloading audio as MP3');
       } else {
@@ -280,13 +281,14 @@ class YtDlpService {
         // Extract height from quality string (e.g., "720p" -> "720")
         const height = quality.replace('p', '');
         
-        // Simple, reliable format selection for playable videos
-        // Download best video+audio and merge properly
-        const formatString = `bestvideo[height<=${height}]+bestaudio/best[height<=${height}]`;
+        // Select best video+audio combo that works with MP4
+        // Prefer MP4/H.264 video codec for maximum compatibility
+        const formatString = `bestvideo[ext=mp4][height<=${height}]+bestaudio[ext=m4a]/bestvideo[height<=${height}]+bestaudio/best[height<=${height}]`;
         
         args.push('-f', formatString);
         args.push('--merge-output-format', 'mp4');  // Force merge to MP4
-        args.push('--postprocessor-args', 'ffmpeg:-movflags +faststart');  // Enable fast start for web playback
+        args.push('--recode-video', 'mp4');  // Recode to MP4 if needed
+        args.push('--postprocessor-args', 'ffmpeg:-c:v libx264 -c:a aac -movflags +faststart');  // Ensure MP4 with H.264 and AAC
         console.log(`[ytdlpService] Downloading with format: ${formatString}`);
         logger.info(`Downloading with format: ${formatString}`);
       }
