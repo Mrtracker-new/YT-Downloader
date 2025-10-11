@@ -268,26 +268,32 @@ class YtDlpService {
       ];
 
       if (audioOnly) {
-        // Extract audio and convert to MP3
+        // Extract audio and convert to MP3 (NEVER m4a)
         args.push('-x');  // Extract audio only
-        args.push('--audio-format', 'mp3');  // Convert to MP3
+        args.push('--audio-format', 'mp3');  // FORCE convert to MP3
         args.push('--audio-quality', '0');  // Best audio quality
         args.push('--embed-thumbnail');  // Embed album art if available
-        args.push('--postprocessor-args', 'ffmpeg:-ar 44100');  // Standard audio sampling rate
-        console.log('[ytdlpService] Downloading audio as MP3');
-        logger.info('Downloading audio as MP3');
+        args.push('--postprocessor-args', 'ffmpeg:-ar 44100 -ac 2 -ab 320k');  // 320kbps stereo MP3
+        args.push('--prefer-ffmpeg');  // Ensure ffmpeg is used for conversion
+        args.push('--no-keep-video');  // Delete source files after extraction
+        console.log('[ytdlpService] Downloading audio as MP3 (320kbps)');
+        logger.info('Downloading audio as MP3 (320kbps, stereo)');
       } else {
         // Download video at specified quality
         // Extract height from quality string (e.g., "720p" -> "720")
         const height = quality.replace('p', '');
         
-        // Select best video+audio combo that works with MP4
-        // Prefer MP4/H.264 video codec for maximum compatibility
-        const formatString = `bestvideo[ext=mp4][height<=${height}]+bestaudio[ext=m4a]/bestvideo[height<=${height}]+bestaudio/best[height<=${height}]`;
+        // IMPORTANT: Ensure we get VIDEO+AUDIO, not just audio
+        // Format selection priority:
+        // 1. Best MP4 video (H.264) + M4A audio at specified height
+        // 2. Best video at specified height + any audio
+        // 3. Best combined format at specified height (fallback)
+        const formatString = `bestvideo[ext=mp4][height<=${height}][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[height<=${height}][vcodec!*=none]+bestaudio/best[height<=${height}][vcodec!*=none]`;
         
         args.push('-f', formatString);
         args.push('--merge-output-format', 'mp4');  // Force merge to MP4
         args.push('--recode-video', 'mp4');  // Recode to MP4 if needed
+        args.push('--no-keep-video');  // Delete separate video/audio files after merge
         // Ensure maximum compatibility with all devices:
         // -c:v libx264: H.264 video codec (plays on everything)
         // -c:a aac: AAC audio codec (universal support)
