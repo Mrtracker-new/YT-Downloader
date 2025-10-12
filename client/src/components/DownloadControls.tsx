@@ -50,14 +50,26 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
   const [eta, setEta] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
 
-  // Extract available qualities
-  const videoQualities = [
-    ...new Set(
-      videoInfo.formats
-        .filter((f) => f.hasVideo && f.qualityLabel)
-        .map((f) => f.qualityLabel)
-    ),
-  ].filter(Boolean) as string[];
+  // Get actual available qualities from video info
+  const actualAvailableQualities = videoInfo.availableQualities || [];
+  
+  // Quality label mapping for better display
+  const qualityLabelMap: Record<string, string> = {
+    '2160p': '4K (2160p)',
+    '1440p': '2K (1440p)',
+    '1080p': 'Full HD (1080p)',
+    '720p': 'HD (720p)',
+    '480p': 'SD (480p)',
+    '360p': '360p',
+    '240p': '240p',
+    '144p': '144p',
+  };
+  
+  // Build quality options - ONLY show actual available qualities
+  const videoQualities = actualAvailableQualities.map(quality => ({
+    label: qualityLabelMap[quality] || quality,
+    value: quality
+  }));
 
   const handleDownload = async () => {
     setDownloading(true);
@@ -183,8 +195,8 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
             }}
           >
             {videoQualities.map((q) => (
-              <MenuItem key={q} value={q}>
-                {q}
+              <MenuItem key={q.value} value={q.value}>
+                {q.label}
               </MenuItem>
             ))}
           </Select>

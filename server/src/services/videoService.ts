@@ -10,6 +10,7 @@ export interface VideoInfo {
   thumbnail: string;
   description: string;
   formats: VideoFormat[];
+  availableQualities?: string[]; // Available video quality options
 }
 
 export interface VideoFormat {
@@ -40,17 +41,49 @@ class VideoService {
       const info = await ytdlpService.getVideoInfo(url);
 
       // Map yt-dlp formats to our VideoFormat interface
-      const availableFormats: VideoFormat[] = info.formats.map((format: any) => ({
-        itag: parseInt(format.format_id) || 0,
-        quality: format.quality || 'unknown',
-        container: format.ext || 'unknown',
-        hasVideo: !!format.vcodec && format.vcodec !== 'none',
-        hasAudio: !!format.acodec && format.acodec !== 'none',
-        qualityLabel: format.height ? `${format.height}p` : undefined,
-        audioQuality: format.acodec || undefined,
-        contentLength: format.filesize?.toString() || undefined,
-      }));
+      const availableFormats: VideoFormat[] = info.formats.map((format: any) => {
+        const hasVideo = !!format.vcodec && format.vcodec !== 'none';
+        const hasAudio = !!format.acodec && format.acodec !== 'none';
+        
+        // Extract quality label - use height if available for video formats
+        let qualityLabel: string | undefined;
+        if (hasVideo && format.height) {
+          // Include fps in label if it's high frame rate (>30fps)
+          const fps = format.fps || 30;
+          qualityLabel = fps > 30 ? `${format.height}p${fps}` : `${format.height}p`;
+        } else if (hasVideo) {
+          qualityLabel = format.quality || undefined;
+        }
+        
+        return {
+          itag: parseInt(format.format_id) || 0,
+          quality: format.quality || 'unknown',
+          container: format.ext || 'unknown',
+          hasVideo,
+          hasAudio,
+          qualityLabel,
+          audioQuality: format.acodec || undefined,
+          contentLength: format.filesize?.toString() || undefined,
+        };
+      });
 
+      // Extract unique video qualities from formats
+      const videoQualities = [...new Set(
+        availableFormats
+          .filter(f => f.hasVideo && f.qualityLabel)
+          .map(f => {
+            // Extract height from qualityLabel (e.g., "720p60" -> "720")
+            const match = f.qualityLabel!.match(/\d+/);
+            return match ? parseInt(match[0]) : null;
+          })
+          .filter(h => h !== null)
+      )] as number[];
+      
+      // Sort qualities in descending order and convert to quality labels
+      const sortedQualities = videoQualities
+        .sort((a, b) => b - a)
+        .map(h => `${h}p`);
+      
       const videoInfo: VideoInfo = {
         videoId: info.id,
         title: info.title,
@@ -59,6 +92,7 @@ class VideoService {
         thumbnail: info.thumbnail,
         description: info.description,
         formats: availableFormats,
+        availableQualities: sortedQualities, // Add actual available qualities
       };
 
       logger.info(`Successfully fetched info for: ${info.title}`);

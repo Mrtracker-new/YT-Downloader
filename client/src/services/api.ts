@@ -25,6 +25,7 @@ export interface VideoInfo {
   thumbnail: string;
   description: string;
   formats: VideoFormat[];
+  availableQualities?: string[]; // Actual available video qualities
 }
 
 export interface VideoFormat {

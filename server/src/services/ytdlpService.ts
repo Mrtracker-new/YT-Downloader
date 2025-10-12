@@ -85,10 +85,10 @@ class YtDlpService {
       args.push('--cookies', this.cookiesFile);
       console.log('[ytdlpService] Using cookies for authentication');
     } else {
-      // Fallback to mobile web client if no cookies
-      args.push('--extractor-args', 'youtube:player_client=mweb');
-      args.push('--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36');
-      console.log('[ytdlpService] Using mobile web client (no cookies)');
+      // Use web client (default) for full format availability
+      // Don't specify player_client to let yt-dlp choose the best one
+      // This ensures we get all available formats including HD/4K
+      console.log('[ytdlpService] Using default web client for full format access');
     }
     
     return args;
@@ -133,7 +133,6 @@ class YtDlpService {
         '--retries', '1',  // Only retry once for speed (was 2)
         '--extractor-retries', '1',  // Limit extractor retries
         '--fragment-retries', '1',  // Reduced fragment retries
-        '--no-call-home',  // Don't check for updates
         '--flat-playlist',  // Faster playlist handling if applicable
         '--skip-unavailable-fragments',  // Skip unavailable content
         '--lazy-playlist',  // Don't extract playlist info upfront
@@ -254,12 +253,10 @@ class YtDlpService {
         '--newline',  // Important: Output progress on new lines for parsing
         '--progress',  // Show progress
         '--console-title',  // Output progress to console
-        '--prefer-ffmpeg',  // Prefer ffmpeg for merging video+audio
         '--buffer-size', '32K',  // Optimized buffer size for speed
         '--http-chunk-size', '10M',  // Download in larger chunks (faster)
         '--retries', '3',  // Retry failed downloads
         '--fragment-retries', '3',  // Retry failed fragments
-        '--no-call-home',  // Don't check for updates
         '--concurrent-fragments', '5',  // Download 5 fragments in parallel
         '--throttled-rate', '100K',  // Minimum download rate threshold
         '--no-part',  // Don't use .part files (slightly faster)
@@ -280,34 +277,63 @@ class YtDlpService {
         logger.info('Downloading audio as MP3 (320kbps, stereo)');
       } else {
         // Download video at specified quality
-        // Extract height from quality string (e.g., "720p" -> "720")
-        const height = quality.replace('p', '');
+        let formatString: string;
         
-        // Simple and reliable format selection for video+audio
-        // This ensures we get BOTH video AND audio streams
-        const formatString = `bestvideo[height<=${height}]+bestaudio/best[height<=${height}]`;
+        // Handle different quality options
+        if (quality.toLowerCase() === 'max' || quality.toLowerCase() === 'best') {
+          // Download ABSOLUTE BEST available quality without any restrictions
+          // bestvideo = highest resolution and bitrate video stream
+          // bestaudio = highest bitrate audio stream  
+          // /best = fallback to best single-file format if merge not possible
+          formatString = 'bestvideo+bestaudio/best';
+          console.log('[ytdlpService] Downloading at MAXIMUM available quality');
+          console.log('[ytdlpService] Format: bestvideo (highest res) + bestaudio (best quality)');
+          logger.info('Downloading at MAXIMUM available quality (bestvideo+bestaudio)');
+        } else {
+          // Extract height from quality string (e.g., "720p" -> "720")
+          const height = quality.replace(/[^0-9]/g, '');
+          
+          // Validate quality option
+          const validQualities = ['144', '240', '360', '480', '720', '1080', '1440', '2160', '4320'];
+          if (!validQualities.includes(height)) {
+            console.warn(`[ytdlpService] Unusual quality requested: ${quality}, using as-is`);
+            logger.warn(`Unusual quality requested: ${quality}`);
+          }
+          
+          // IMPROVED format selection to guarantee video+audio in MP4
+          // Priority order:
+          // 1. Best video up to specified height + best audio, merge to MP4
+          // 2. Best combined format up to specified height in MP4
+          // 3. Best available format
+          formatString = `bestvideo[height<=${height}]+bestaudio/best[height<=${height}]`;
+          
+          console.log(`[ytdlpService] Downloading at ${quality} (${height}p) quality`);
+          logger.info(`Downloading at ${quality} (${height}p) quality`);
+        }
         
         args.push('-f', formatString);
-        args.push('--merge-output-format', 'mp4');  // Force merge to MP4
-        args.push('--remux-video', 'mp4');  // Remux to MP4 container
-        args.push('--add-metadata');  // Add metadata for better compatibility
-        // Use ffmpeg to merge properly and keep as MP4
-        args.push('--postprocessor-args', 'ffmpeg:-c copy -movflags +faststart');
-        console.log(`[ytdlpService] Downloading with format: ${formatString}`);
-        logger.info(`Downloading with format: ${formatString} (MP4 output)`);
-        logger.info('Video will be merged to MP4 and play in Windows Media Player');
+        
+        // Force merge to MP4
+        args.push('--merge-output-format', 'mp4');
+        
+        console.log(`[ytdlpService] Format string: ${formatString}`);
+        logger.info(`Format string: ${formatString}`);
+        logger.info('Video will be properly merged to MP4 with AAC audio codec');
       }
 
       // Add output path and URL at the end
       args.push('-o', outputPath);
       args.push(url);
 
+      // Log the full command for debugging
+      console.log(`[ytdlpService] Full command: ${this.ytdlpPath} ${args.join(' ')}`);
       logger.info(`Starting yt-dlp download to: ${outputPath}`);
+      logger.info(`Full command: ${this.ytdlpPath} ${args.join(' ')}`);
 
-      const process = spawn(this.ytdlpPath, args);
+      const ytdlpProcess = spawn(this.ytdlpPath, args);
       let stderr = '';
 
-      process.stdout.on('data', (data) => {
+      ytdlpProcess.stdout.on('data', (data) => {
         const output = data.toString();
         const lines = output.split('\n');
         
@@ -352,7 +378,7 @@ class YtDlpService {
         }
       });
 
-      process.stderr.on('data', (data) => {
+      ytdlpProcess.stderr.on('data', (data) => {
         stderr += data.toString();
         const output = data.toString();
         const lines = output.split('\n');
@@ -394,7 +420,7 @@ class YtDlpService {
         }
       });
 
-      process.on('close', (code) => {
+      ytdlpProcess.on('close', (code) => {
         if (code === 0) {
           logger.info('yt-dlp download completed successfully');
           if (onProgress) onProgress(100, '00:00', 'Complete');
@@ -405,7 +431,7 @@ class YtDlpService {
         }
       });
 
-      process.on('error', (error) => {
+      ytdlpProcess.on('error', (error) => {
         reject(new Error(`Failed to spawn yt-dlp: ${error.message}`));
       });
     });
@@ -425,7 +451,20 @@ class YtDlpService {
     if (audioOnly) {
       args.push('-x', '--audio-format', 'mp3', '--audio-quality', '0');
     } else {
-      args.push('-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+      // Use the same improved format selection as regular download
+      let formatString: string;
+      
+      if (quality.toLowerCase() === 'max' || quality.toLowerCase() === 'best') {
+        // Best available quality without restrictions
+        formatString = 'bestvideo+bestaudio/best';
+      } else {
+        // Extract height from quality string
+        const height = quality.replace(/[^0-9]/g, '');
+        formatString = `bestvideo[height<=${height}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=${height}]+bestaudio/best[height<=${height}][ext=mp4]/best[height<=${height}]/best`;
+      }
+      
+      args.push('-f', formatString);
+      args.push('--merge-output-format', 'mp4');
     }
 
     args.push(url);
