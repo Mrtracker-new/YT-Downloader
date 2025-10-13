@@ -265,16 +265,12 @@ class YtDlpService {
       ];
 
       if (audioOnly) {
-        // Extract audio and convert to MP3 (NEVER m4a)
+        // Extract audio and convert to MP3
         args.push('-x');  // Extract audio only
-        args.push('--audio-format', 'mp3');  // FORCE convert to MP3
+        args.push('--audio-format', 'mp3');  // Convert to MP3
         args.push('--audio-quality', '0');  // Best audio quality
-        args.push('--embed-thumbnail');  // Embed album art if available
-        args.push('--postprocessor-args', 'ffmpeg:-ar 44100 -ac 2 -ab 320k');  // 320kbps stereo MP3
-        args.push('--prefer-ffmpeg');  // Ensure ffmpeg is used for conversion
-        args.push('--no-keep-video');  // Delete source files after extraction
-        console.log('[ytdlpService] Downloading audio as MP3 (320kbps)');
-        logger.info('Downloading audio as MP3 (320kbps, stereo)');
+        console.log('[ytdlpService] Downloading audio as MP3');
+        logger.info('Downloading audio as MP3 (best quality)');
       } else {
         // Download video at specified quality
         let formatString: string;
