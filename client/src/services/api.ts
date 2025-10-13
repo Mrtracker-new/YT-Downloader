@@ -257,7 +257,15 @@ export const downloadVideo = async (
     await new Promise(resolve => setTimeout(resolve, 2000));
 
     // Step 4: Retrieve the downloaded file
-    const fileResponse = await fetch(`${API_BASE_URL}/api/video/file/${downloadId}`);
+    // Use a longer timeout for large file downloads (10 minutes)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minute timeout
+    
+    const fileResponse = await fetch(`${API_BASE_URL}/api/video/file/${downloadId}`, {
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
     
     if (!fileResponse.ok) {
       throw new Error('Failed to retrieve file');
