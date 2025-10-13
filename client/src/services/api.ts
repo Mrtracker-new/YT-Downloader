@@ -271,9 +271,6 @@ export const downloadVideo = async (
       throw new Error('Failed to retrieve file');
     }
 
-    // Get the blob from response
-    const blob = await fileResponse.blob();
-
     // Extract filename from Content-Disposition header
     const contentDisposition = fileResponse.headers.get('content-disposition');
     let downloadFilename = filename; // Use filename from initial response
@@ -296,6 +293,48 @@ export const downloadVideo = async (
     }
     
     console.log('Final filename to download:', downloadFilename);
+    console.log('File size:', fileResponse.headers.get('content-length'), 'bytes');
+
+    // Stream the file in chunks to avoid memory issues with large files
+    const reader = fileResponse.body?.getReader();
+    if (!reader) {
+      throw new Error('Failed to get response reader');
+    }
+
+    const chunks: BlobPart[] = [];
+    let receivedLength = 0;
+    const contentLength = parseInt(fileResponse.headers.get('content-length') || '0');
+
+    console.log('Starting to read file stream...');
+    
+    while (true) {
+      const { done, value } = await reader.read();
+      
+      if (done) {
+        console.log('Stream complete!');
+        break;
+      }
+      
+      if (value) {
+        chunks.push(value);
+        receivedLength += value.length;
+      }
+      
+      // Log progress for large files
+      if (contentLength > 0) {
+        const percent = (receivedLength / contentLength * 100).toFixed(1);
+        console.log(`Receiving file: ${percent}% (${receivedLength}/${contentLength} bytes)`);
+      }
+    }
+
+    console.log(`Total received: ${receivedLength} bytes`);
+    
+    // Combine chunks into a single blob
+    const blob = new Blob(chunks, { 
+      type: filename.endsWith('.mp3') ? 'audio/mpeg' : 'video/mp4' 
+    });
+    
+    console.log('Created blob of size:', blob.size, 'bytes');
 
     // Create download link and trigger download
     const downloadUrl = window.URL.createObjectURL(blob);
