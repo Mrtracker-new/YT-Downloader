@@ -312,11 +312,6 @@ class YtDlpService {
         // Force merge to MP4
         args.push('--merge-output-format', 'mp4');
         
-        // IMPORTANT: Force recode to MP4 if the downloaded format is not MP4
-        // This ensures MP4 output even on servers where merge might fail
-        // Only recodes if necessary (if source is already MP4, it won't recode)
-        args.push('--recode-video', 'mp4');
-        
         console.log(`[ytdlpService] Format string: ${formatString}`);
         logger.info(`Format string: ${formatString}`);
         logger.info('Video will be properly merged to MP4 with AAC audio codec');
@@ -466,8 +461,6 @@ class YtDlpService {
       
       args.push('-f', formatString);
       args.push('--merge-output-format', 'mp4');
-      // Force recode to MP4 if necessary (same as downloadVideo method)
-      args.push('--recode-video', 'mp4');
     }
 
     args.push(url);
