@@ -277,14 +277,13 @@ class YtDlpService {
         
         // Handle different quality options
         if (quality.toLowerCase() === 'max' || quality.toLowerCase() === 'best') {
-          // Download ABSOLUTE BEST available quality without any restrictions
-          // bestvideo = highest resolution and bitrate video stream
-          // bestaudio = highest bitrate audio stream  
-          // /best = fallback to best single-file format if merge not possible
-          formatString = 'bestvideo+bestaudio/best';
+          // Download BEST available quality
+          // PREFER single-file format to avoid ffmpeg merge issues on production servers
+          // Priority: best single-file > bestvideo+bestaudio (requires merge)
+          formatString = 'best[ext=mp4]/bestvideo+bestaudio/best';
           console.log('[ytdlpService] Downloading at MAXIMUM available quality');
-          console.log('[ytdlpService] Format: bestvideo (highest res) + bestaudio (best quality)');
-          logger.info('Downloading at MAXIMUM available quality (bestvideo+bestaudio)');
+          console.log('[ytdlpService] Format: Prefer single-file MP4, fallback to merge');
+          logger.info('Downloading at MAXIMUM available quality (prefer single-file)');
         } else {
           // Extract height from quality string (e.g., "720p" -> "720")
           const height = quality.replace(/[^0-9]/g, '');
@@ -296,12 +295,12 @@ class YtDlpService {
             logger.warn(`Unusual quality requested: ${quality}`);
           }
           
-          // IMPROVED format selection to guarantee video+audio in MP4
+          // IMPROVED format selection - PREFER single-file formats to avoid merge issues
           // Priority order:
-          // 1. Best video up to specified height + best audio, merge to MP4
-          // 2. Best combined format up to specified height in MP4
+          // 1. Best single-file format up to specified height (has both video+audio, no merge needed)
+          // 2. Best video up to specified height + best audio (requires merge)
           // 3. Best available format
-          formatString = `bestvideo[height<=${height}]+bestaudio/best[height<=${height}]`;
+          formatString = `best[height<=${height}][ext=mp4]/bestvideo[height<=${height}]+bestaudio/best[height<=${height}]`;
           
           console.log(`[ytdlpService] Downloading at ${quality} (${height}p) quality`);
           logger.info(`Downloading at ${quality} (${height}p) quality`);
@@ -337,6 +336,8 @@ class YtDlpService {
         // Process each line separately for better parsing
         for (const line of lines) {
           if (line.trim()) {
+            // Log everything from yt-dlp for debugging
+            console.log('[yt-dlp stdout]:', line.trim());
             logger.info('yt-dlp:', line.trim());
           }
           
@@ -467,12 +468,13 @@ class YtDlpService {
       let formatString: string;
       
       if (quality.toLowerCase() === 'max' || quality.toLowerCase() === 'best') {
-        // Best available quality without restrictions
-        formatString = 'bestvideo+bestaudio/best';
+        // Best available quality - prefer single-file formats
+        formatString = 'best[ext=mp4]/bestvideo+bestaudio/best';
       } else {
         // Extract height from quality string
         const height = quality.replace(/[^0-9]/g, '');
-        formatString = `bestvideo[height<=${height}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=${height}]+bestaudio/best[height<=${height}][ext=mp4]/best[height<=${height}]/best`;
+        // Prefer single-file formats to avoid merge issues
+        formatString = `best[height<=${height}][ext=mp4]/bestvideo[height<=${height}]+bestaudio/best[height<=${height}]`;
       }
       
       args.push('-f', formatString);
