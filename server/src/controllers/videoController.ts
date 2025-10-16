@@ -3,7 +3,7 @@ import videoService from '../services/videoService';
 import ytdlpService from '../services/ytdlpService';
 import sanitize from 'sanitize-filename';
 import logger from '../utils/logger';
-import { createReadStream, unlink, readdirSync, existsSync, mkdirSync } from 'fs';
+import { unlink, readdirSync, existsSync, mkdirSync } from 'fs';
 import { join, resolve } from 'path';
 
 // Store for tracking download progress
@@ -329,57 +329,24 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
     const contentType = filename.endsWith('.mp3') ? 'audio/mpeg' : 'video/mp4';
     logger.info(`[getDownloadedFile] Content-Type: ${contentType}`);
     
-    // Set response headers with Content-Length
-    const contentDisposition = `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+    // Set response headers
+    logger.info(`[getDownloadedFile] Sending file using res.download for reliable transfer`);
     
-    res.writeHead(200, {
-      'Content-Type': contentType,
-      'Content-Length': fileSize,  // CRITICAL: Tell browser the full file size
-      'Content-Disposition': contentDisposition,
-      'X-Suggested-Filename': filename,
-      'Access-Control-Expose-Headers': 'Content-Disposition, X-Suggested-Filename',
-      'Cache-Control': 'no-cache',
-      'Accept-Ranges': 'bytes'  // Allow resume if connection drops
-    });
-    
-    // Stream the file
-    logger.info(`[getDownloadedFile] Starting file stream for: ${filename}`);
-    const fileStream = createReadStream(tempFile);
-    
-    let bytesStreamed = 0;
-    
-    fileStream.on('data', (chunk) => {
-      bytesStreamed += chunk.length;
-    });
-    
-    fileStream.on('error', (error) => {
-      logger.error(`[getDownloadedFile] File stream error:`, error);
-      logger.error(`[getDownloadedFile] Bytes streamed before error: ${bytesStreamed} / ${fileSize}`);
-      if (!res.headersSent) {
-        res.status(500).json({
-          success: false,
-          error: 'Failed to read downloaded file'
-        });
-      }
-    });
-    
-    fileStream.on('end', () => {
-      logger.info(`[getDownloadedFile] File stream ended: ${filename}`);
-      logger.info(`[getDownloadedFile] Total bytes streamed: ${bytesStreamed} / ${fileSize}`);
-      if (bytesStreamed === fileSize) {
-        logger.info(`[getDownloadedFile] ✓ Complete file sent successfully`);
+    // Use res.download() which is more reliable than streaming for large files
+    res.download(tempFile, filename, (err) => {
+      if (err) {
+        logger.error(`[getDownloadedFile] Download error:`, err);
+        // Check if response was already sent
+        if (!res.headersSent) {
+          res.status(500).json({
+            success: false,
+            error: 'Failed to download file'
+          });
+        }
       } else {
-        logger.warn(`[getDownloadedFile] ✗ Stream incomplete! Expected ${fileSize}, sent ${bytesStreamed}`);
+        logger.info(`[getDownloadedFile] ✓ File downloaded successfully: ${filename} (${fileSize} bytes)`);
       }
     });
-    
-    // Handle client disconnect
-    req.on('close', () => {
-      logger.warn(`[getDownloadedFile] Client disconnected during download: ${filename}`);
-      logger.warn(`[getDownloadedFile] Bytes streamed before disconnect: ${bytesStreamed} / ${fileSize}`);
-    });
-    
-    fileStream.pipe(res);
   } catch (error) {
     logger.error('Error in getDownloadedFile:', error);
     if (!res.headersSent) {
