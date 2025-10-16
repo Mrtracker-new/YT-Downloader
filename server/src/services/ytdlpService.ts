@@ -317,9 +317,6 @@ class YtDlpService {
         // Only recodes if necessary (if source is already MP4, it won't recode)
         args.push('--recode-video', 'mp4');
         
-        // Clean up intermediate files after merge/recode (keep only final output)
-        args.push('--no-keep-video');  // Delete original video files after recoding
-        
         console.log(`[ytdlpService] Format string: ${formatString}`);
         logger.info(`Format string: ${formatString}`);
         logger.info('Video will be properly merged to MP4 with AAC audio codec');
@@ -471,8 +468,6 @@ class YtDlpService {
       args.push('--merge-output-format', 'mp4');
       // Force recode to MP4 if necessary (same as downloadVideo method)
       args.push('--recode-video', 'mp4');
-      // Clean up intermediate files
-      args.push('--no-keep-video');
     }
 
     args.push(url);
