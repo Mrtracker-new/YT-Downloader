@@ -312,10 +312,12 @@ class YtDlpService {
         // Force merge to MP4
         args.push('--merge-output-format', 'mp4');
         
-        // IMPORTANT: Force recode to MP4 if the downloaded format is not MP4
-        // This ensures MP4 output even on servers where merge might fail
-        // Only recodes if necessary (if source is already MP4, it won't recode)
-        args.push('--recode-video', 'mp4');
+        // CRITICAL: Use postprocessor to convert video to proper MP4 with H.264 codec
+        // This is more reliable than --recode-video on production servers
+        args.push('--postprocessor-args', 'ffmpeg:-c:v libx264 -c:a aac');
+        
+        // Force remux or recode to MP4 if needed
+        args.push('--remux-video', 'mp4');  // Try remux first (faster)
         
         // Clean up intermediate files after merge/recode (keep only final output)
         args.push('--no-keep-video');  // Delete original video files after recoding
@@ -469,8 +471,9 @@ class YtDlpService {
       
       args.push('-f', formatString);
       args.push('--merge-output-format', 'mp4');
-      // Force recode to MP4 if necessary (same as downloadVideo method)
-      args.push('--recode-video', 'mp4');
+      // Force proper MP4 encoding (same as downloadVideo method)
+      args.push('--postprocessor-args', 'ffmpeg:-c:v libx264 -c:a aac');
+      args.push('--remux-video', 'mp4');
       // Clean up intermediate files
       args.push('--no-keep-video');
     }
