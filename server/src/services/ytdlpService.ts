@@ -253,17 +253,14 @@ class YtDlpService {
         '--newline',  // Important: Output progress on new lines for parsing
         '--progress',  // Show progress
         '--console-title',  // Output progress to console
-        '--buffer-size', '16K',  // Smaller buffer for more stable download
-        '--http-chunk-size', '5M',  // Smaller chunks for reliability
-        '--retries', '10',  // More retries for reliability
-        '--fragment-retries', '10',  // More fragment retries
-        '--concurrent-fragments', '1',  // Sequential download (most stable)
-        '--throttled-rate', '50K',  // Lower threshold
+        '--buffer-size', '32K',  // Optimized buffer size for speed
+        '--http-chunk-size', '10M',  // Download in larger chunks (faster)
+        '--retries', '5',  // Increased retries for reliability
+        '--fragment-retries', '5',  // Increased fragment retries
+        '--concurrent-fragments', '3',  // Reduced to 3 for stability
+        '--throttled-rate', '100K',  // Minimum download rate threshold
         '--no-part',  // CRITICAL: Don't use .part files - write directly to final filename
         '--no-mtime',  // Don't copy mtime
-        '--socket-timeout', '30',  // 30 second socket timeout
-        '--force-ipv4',  // Force IPv4 (sometimes more reliable)
-        '--no-check-certificate',  // Skip SSL verification (can help with network issues)
         ...this.getCommonArgs()
       ];
 
@@ -425,38 +422,10 @@ class YtDlpService {
           // Wait a moment for file system operations to complete
           setTimeout(() => {
             const { existsSync, statSync } = require('fs');
-            const { spawn } = require('child_process');
             
             if (existsSync(outputPath)) {
               const stats = statSync(outputPath);
               logger.info(`[ytdlpService] Output file exists, size: ${stats.size} bytes`);
-              
-              // Verify video duration using ffprobe (if not audio-only)
-              if (!audioOnly) {
-                logger.info(`[ytdlpService] Verifying video duration with ffprobe...`);
-                const ffprobe = spawn('ffprobe', [
-                  '-v', 'error',
-                  '-show_entries', 'format=duration',
-                  '-of', 'default=noprint_wrappers=1:nokey=1',
-                  outputPath
-                ]);
-                
-                let durationOutput = '';
-                ffprobe.stdout.on('data', (data) => {
-                  durationOutput += data.toString();
-                });
-                
-                ffprobe.on('close', (probeCode) => {
-                  if (probeCode === 0 && durationOutput.trim()) {
-                    const duration = parseFloat(durationOutput.trim());
-                    const minutes = Math.floor(duration / 60);
-                    const seconds = Math.floor(duration % 60);
-                    logger.info(`[ytdlpService] Video duration: ${minutes}:${seconds.toString().padStart(2, '0')} (${duration.toFixed(2)}s)`);
-                  } else {
-                    logger.warn(`[ytdlpService] Could not verify video duration (ffprobe exit code: ${probeCode})`);
-                  }
-                });
-              }
             } else {
               logger.warn(`[ytdlpService] Output file does NOT exist at: ${outputPath}`);
               logger.warn(`[ytdlpService] File might be created with different name (e.g., .temp.mp4)`);
