@@ -250,50 +250,26 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
     logger.info(`[getDownloadedFile] Matching files for ID ${downloadId}: ${JSON.stringify(matchingFiles)}`);
     
     // Prioritize final output files over intermediate/temp files
-    // Priority order:
-    // 1. Clean .mp4/.mp3 files (without format codes or .temp)
-    // 2. .temp.mp4/.temp.mp3 (these are actually the merged output from yt-dlp)
-    // 3. Any other matching file (last resort)
-    
-    // First, try to find a clean final file (no format codes, no .temp)
-    let targetFile = matchingFiles.find((f: string) => {
+    // Exclude intermediate format files (like .f251.webm, .f401.mp4, .temp.mp4)
+    // Select the final merged file (should end with .mp4 or .mp3 without format codes)
+    const targetFile = matchingFiles.find((f: string) => {
       // Skip intermediate format files (e.g., .f251.webm, .f401.mp4)
       if (/\.f\d+\./.test(f)) {
         logger.info(`[getDownloadedFile] Skipping intermediate format file: ${f}`);
         return false;
       }
-      // Skip temp files for now (we'll check them in second pass)
+      // Skip temp files
       if (f.includes('.temp.')) {
+        logger.info(`[getDownloadedFile] Skipping temp file: ${f}`);
         return false;
       }
       // Accept final mp4 or mp3 files
       const accepted = f.endsWith('.mp4') || f.endsWith('.mp3');
       if (accepted) {
-        logger.info(`[getDownloadedFile] Found clean final output file: ${f}`);
+        logger.info(`[getDownloadedFile] Found final output file: ${f}`);
       }
       return accepted;
-    });
-    
-    // If no clean file found, accept .temp.mp4/.temp.mp3 (yt-dlp merged output)
-    if (!targetFile) {
-      logger.info(`[getDownloadedFile] No clean final file found, looking for .temp files`);
-      targetFile = matchingFiles.find((f: string) => {
-        // Skip intermediate format files
-        if (/\.f\d+\./.test(f)) return false;
-        // Accept .temp.mp4 or .temp.mp3
-        const isTempOutput = (f.includes('.temp.mp4') || f.includes('.temp.mp3'));
-        if (isTempOutput) {
-          logger.info(`[getDownloadedFile] Found temp merged file: ${f}`);
-        }
-        return isTempOutput;
-      });
-    }
-    
-    // Last resort: use first matching file
-    if (!targetFile) {
-      logger.warn(`[getDownloadedFile] No suitable file found, falling back to first match`);
-      targetFile = matchingFiles[0];
-    }
+    }) || matchingFiles[0]; // Fallback to first file if no clean match
     
     if (!targetFile) {
       logger.error(`[getDownloadedFile] File not found for download ID: ${downloadId}`);
@@ -310,13 +286,9 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
     // Extract filename by skipping the downloadId prefix (timestamp-randomstring-filename)
     // Split by '-' and skip first 2 parts (timestamp and random string)
     const parts = targetFile.split('-');
-    let filename = parts.slice(2).join('-'); // Rejoin in case filename has dashes
+    const filename = parts.slice(2).join('-'); // Rejoin in case filename has dashes
     
-    // Clean up filename: remove .temp. and intermediate format codes
-    filename = filename.replace(/\.temp\./, '.'); // Remove .temp.
-    filename = filename.replace(/\.f\d+\./, '.'); // Remove format codes like .f251.
-    
-    logger.info(`[getDownloadedFile] Cleaned filename: ${filename}`);
+    logger.info(`[getDownloadedFile] Extracted filename: ${filename}`);
     
     // Determine content type based on file extension
     const contentType = filename.endsWith('.mp3') ? 'audio/mpeg' : 'video/mp4';
