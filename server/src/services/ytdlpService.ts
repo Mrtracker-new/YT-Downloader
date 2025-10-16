@@ -248,17 +248,18 @@ class YtDlpService {
       }
 
       const args = [
-        '--verbose',  // CRITICAL: Show detailed output for debugging
+        '--no-warnings',
         '--no-playlist',
         '--newline',  // Important: Output progress on new lines for parsing
         '--progress',  // Show progress
         '--console-title',  // Output progress to console
         '--buffer-size', '32K',  // Optimized buffer size for speed
         '--http-chunk-size', '10M',  // Download in larger chunks (faster)
-        '--retries', '5',  // Increased retries for reliability
-        '--fragment-retries', '5',  // Increased fragment retries
-        '--concurrent-fragments', '3',  // Reduced to 3 for stability
+        '--retries', '3',  // Retry failed downloads
+        '--fragment-retries', '3',  // Retry failed fragments
+        '--concurrent-fragments', '5',  // Download 5 fragments in parallel
         '--throttled-rate', '100K',  // Minimum download rate threshold
+        '--no-part',  // Don't use .part files (slightly faster)
         '--no-mtime',  // Don't copy mtime
         ...this.getCommonArgs()
       ];
@@ -276,11 +277,13 @@ class YtDlpService {
         
         // Handle different quality options
         if (quality.toLowerCase() === 'max' || quality.toLowerCase() === 'best') {
-          // Download BEST available single-file format (NO MERGING)
-          // This is the most reliable approach - avoids all ffmpeg issues
-          formatString = 'best[ext=mp4]/best';
-          console.log('[ytdlpService] Downloading best single-file format (no merge)');
-          logger.info('Downloading best single-file format (no merge)');
+          // Download BEST available quality
+          // PREFER single-file format to avoid ffmpeg merge issues on production servers
+          // Priority: best single-file > bestvideo+bestaudio (requires merge)
+          formatString = 'best[ext=mp4]/bestvideo+bestaudio/best';
+          console.log('[ytdlpService] Downloading at MAXIMUM available quality');
+          console.log('[ytdlpService] Format: Prefer single-file MP4, fallback to merge');
+          logger.info('Downloading at MAXIMUM available quality (prefer single-file)');
         } else {
           // Extract height from quality string (e.g., "720p" -> "720")
           const height = quality.replace(/[^0-9]/g, '');
@@ -292,9 +295,12 @@ class YtDlpService {
             logger.warn(`Unusual quality requested: ${quality}`);
           }
           
-          // SIMPLE format selection - ONLY single-file formats (NO MERGING)
-          // This is the most reliable approach for production servers
-          formatString = `best[height<=${height}][ext=mp4]/best[height<=${height}]`;
+          // IMPROVED format selection - PREFER single-file formats to avoid merge issues
+          // Priority order:
+          // 1. Best single-file format up to specified height (has both video+audio, no merge needed)
+          // 2. Best video up to specified height + best audio (requires merge)
+          // 3. Best available format
+          formatString = `best[height<=${height}][ext=mp4]/bestvideo[height<=${height}]+bestaudio/best[height<=${height}]`;
           
           console.log(`[ytdlpService] Downloading at ${quality} (${height}p) quality`);
           logger.info(`Downloading at ${quality} (${height}p) quality`);
@@ -302,8 +308,9 @@ class YtDlpService {
         
         args.push('-f', formatString);
         
-        // No merge flags - we're only downloading single-file formats
-        // This avoids all ffmpeg merge issues that were causing corruption
+        // Force merge to MP4 container
+        // This merges separate video+audio streams into a single MP4 file
+        args.push('--merge-output-format', 'mp4');
         
         console.log(`[ytdlpService] Format string: ${formatString}`);
         logger.info(`Format string: ${formatString}`);
@@ -377,8 +384,6 @@ class YtDlpService {
         // Process each line separately for better parsing
         for (const line of lines) {
           if (line.trim()) {
-            // Log ALL stderr output (verbose mode shows important info here)
-            console.log('[yt-dlp stderr]:', line.trim());
             logger.info('yt-dlp stderr:', line.trim());
           }
           
@@ -432,7 +437,7 @@ class YtDlpService {
             
             if (onProgress) onProgress(100, '00:00', 'Complete');
             resolve(outputPath);
-          }, 3000); // Wait 3 seconds for file system to fully flush writes
+          }, 1000); // Wait 1 second for file operations
         } else {
           logger.error('yt-dlp failed:', stderr);
           reject(new Error(`Download failed with code ${code}`));
@@ -463,17 +468,17 @@ class YtDlpService {
       let formatString: string;
       
       if (quality.toLowerCase() === 'max' || quality.toLowerCase() === 'best') {
-        // Best single-file format only (no merging)
-        formatString = 'best[ext=mp4]/best';
+        // Best available quality - prefer single-file formats
+        formatString = 'best[ext=mp4]/bestvideo+bestaudio/best';
       } else {
         // Extract height from quality string
         const height = quality.replace(/[^0-9]/g, '');
-        // Single-file formats only (no merging)
-        formatString = `best[height<=${height}][ext=mp4]/best[height<=${height}]`;
+        // Prefer single-file formats to avoid merge issues
+        formatString = `best[height<=${height}][ext=mp4]/bestvideo[height<=${height}]+bestaudio/best[height<=${height}]`;
       }
       
       args.push('-f', formatString);
-      // No merge flags - single-file formats only
+      args.push('--merge-output-format', 'mp4');
     }
 
     args.push(url);
