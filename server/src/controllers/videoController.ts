@@ -247,28 +247,17 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
     
     // Filter files that match the downloadId
     const matchingFiles = files.filter((f: string) => f.startsWith(downloadId));
-    logger.info(`[getDownloadedFile] Matching files for ID ${downloadId}: ${JSON.stringify(matchingFiles)}`);
     
     // Prioritize final output files over intermediate/temp files
     // Exclude intermediate format files (like .f251.webm, .f401.mp4, .temp.mp4)
     // Select the final merged file (should end with .mp4 or .mp3 without format codes)
     const targetFile = matchingFiles.find((f: string) => {
       // Skip intermediate format files (e.g., .f251.webm, .f401.mp4)
-      if (/\.f\d+\./.test(f)) {
-        logger.info(`[getDownloadedFile] Skipping intermediate format file: ${f}`);
-        return false;
-      }
+      if (/\.f\d+\./.test(f)) return false;
       // Skip temp files
-      if (f.includes('.temp.')) {
-        logger.info(`[getDownloadedFile] Skipping temp file: ${f}`);
-        return false;
-      }
+      if (f.includes('.temp.')) return false;
       // Accept final mp4 or mp3 files
-      const accepted = f.endsWith('.mp4') || f.endsWith('.mp3');
-      if (accepted) {
-        logger.info(`[getDownloadedFile] Found final output file: ${f}`);
-      }
-      return accepted;
+      return f.endsWith('.mp4') || f.endsWith('.mp3');
     }) || matchingFiles[0]; // Fallback to first file if no clean match
     
     if (!targetFile) {
@@ -280,7 +269,7 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
       });
     }
     
-    logger.info(`[getDownloadedFile] Selected file: ${targetFile}`);
+    logger.info(`[getDownloadedFile] Found file: ${targetFile}`);
     const tempFile = join(tempDir, targetFile);
     
     // Extract filename by skipping the downloadId prefix (timestamp-randomstring-filename)
@@ -288,17 +277,11 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
     const parts = targetFile.split('-');
     const filename = parts.slice(2).join('-'); // Rejoin in case filename has dashes
     
-    logger.info(`[getDownloadedFile] Extracted filename: ${filename}`);
-    
-    // Determine content type based on file extension
-    const contentType = filename.endsWith('.mp3') ? 'audio/mpeg' : 'video/mp4';
-    logger.info(`[getDownloadedFile] Content-Type: ${contentType}`);
-    
     // Set response headers
     const contentDisposition = `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
     
     res.writeHead(200, {
-      'Content-Type': contentType,
+      'Content-Type': filename.endsWith('.mp3') ? 'audio/mpeg' : 'video/mp4',
       'Content-Disposition': contentDisposition,
       'X-Suggested-Filename': filename,
       'Access-Control-Expose-Headers': 'Content-Disposition, X-Suggested-Filename',
