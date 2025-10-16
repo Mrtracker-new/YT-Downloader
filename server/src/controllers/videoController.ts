@@ -244,7 +244,21 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
     
     const files = readdirSync(tempDir);
     logger.info(`[getDownloadedFile] Files in directory: ${JSON.stringify(files)}`);
-    const targetFile = files.find((f: string) => f.startsWith(downloadId));
+    
+    // Filter files that match the downloadId
+    const matchingFiles = files.filter((f: string) => f.startsWith(downloadId));
+    
+    // Prioritize final output files over intermediate/temp files
+    // Exclude intermediate format files (like .f251.webm, .f401.mp4, .temp.mp4)
+    // Select the final merged file (should end with .mp4 or .mp3 without format codes)
+    const targetFile = matchingFiles.find((f: string) => {
+      // Skip intermediate format files (e.g., .f251.webm, .f401.mp4)
+      if (/\.f\d+\./.test(f)) return false;
+      // Skip temp files
+      if (f.includes('.temp.')) return false;
+      // Accept final mp4 or mp3 files
+      return f.endsWith('.mp4') || f.endsWith('.mp3');
+    }) || matchingFiles[0]; // Fallback to first file if no clean match
     
     if (!targetFile) {
       logger.error(`[getDownloadedFile] File not found for download ID: ${downloadId}`);
