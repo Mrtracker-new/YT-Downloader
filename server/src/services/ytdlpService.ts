@@ -259,6 +259,7 @@ class YtDlpService {
         '--fragment-retries', '5',  // Increased fragment retries
         '--concurrent-fragments', '3',  // Reduced to 3 for stability
         '--throttled-rate', '100K',  // Minimum download rate threshold
+        '--no-part',  // CRITICAL: Don't use .part files - write directly to final filename
         '--no-mtime',  // Don't copy mtime
         ...this.getCommonArgs()
       ];

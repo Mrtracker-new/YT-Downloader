@@ -318,26 +318,43 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
     
     logger.info(`[getDownloadedFile] Cleaned filename: ${filename}`);
     
+    // Get file stats for Content-Length
+    const { statSync } = require('fs');
+    const fileStats = statSync(tempFile);
+    const fileSize = fileStats.size;
+    
+    logger.info(`[getDownloadedFile] File size: ${fileSize} bytes (${(fileSize / 1024 / 1024).toFixed(2)} MB)`);
+    
     // Determine content type based on file extension
     const contentType = filename.endsWith('.mp3') ? 'audio/mpeg' : 'video/mp4';
     logger.info(`[getDownloadedFile] Content-Type: ${contentType}`);
     
-    // Set response headers
+    // Set response headers with Content-Length
     const contentDisposition = `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
     
     res.writeHead(200, {
       'Content-Type': contentType,
+      'Content-Length': fileSize,  // CRITICAL: Tell browser the full file size
       'Content-Disposition': contentDisposition,
       'X-Suggested-Filename': filename,
       'Access-Control-Expose-Headers': 'Content-Disposition, X-Suggested-Filename',
-      'Cache-Control': 'no-cache'
+      'Cache-Control': 'no-cache',
+      'Accept-Ranges': 'bytes'  // Allow resume if connection drops
     });
     
     // Stream the file
+    logger.info(`[getDownloadedFile] Starting file stream for: ${filename}`);
     const fileStream = createReadStream(tempFile);
     
+    let bytesStreamed = 0;
+    
+    fileStream.on('data', (chunk) => {
+      bytesStreamed += chunk.length;
+    });
+    
     fileStream.on('error', (error) => {
-      logger.error('File stream error:', error);
+      logger.error(`[getDownloadedFile] File stream error:`, error);
+      logger.error(`[getDownloadedFile] Bytes streamed before error: ${bytesStreamed} / ${fileSize}`);
       if (!res.headersSent) {
         res.status(500).json({
           success: false,
@@ -347,7 +364,19 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
     });
     
     fileStream.on('end', () => {
-      logger.info(`File sent: ${filename}`);
+      logger.info(`[getDownloadedFile] File stream ended: ${filename}`);
+      logger.info(`[getDownloadedFile] Total bytes streamed: ${bytesStreamed} / ${fileSize}`);
+      if (bytesStreamed === fileSize) {
+        logger.info(`[getDownloadedFile] ✓ Complete file sent successfully`);
+      } else {
+        logger.warn(`[getDownloadedFile] ✗ Stream incomplete! Expected ${fileSize}, sent ${bytesStreamed}`);
+      }
+    });
+    
+    // Handle client disconnect
+    req.on('close', () => {
+      logger.warn(`[getDownloadedFile] Client disconnected during download: ${filename}`);
+      logger.warn(`[getDownloadedFile] Bytes streamed before disconnect: ${bytesStreamed} / ${fileSize}`);
     });
     
     fileStream.pipe(res);
