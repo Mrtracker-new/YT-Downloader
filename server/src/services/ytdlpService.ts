@@ -442,11 +442,11 @@ class YtDlpService {
                 ]);
                 
                 let durationOutput = '';
-                ffprobe.stdout.on('data', (data: Buffer) => {
+                ffprobe.stdout.on('data', (data) => {
                   durationOutput += data.toString();
                 });
                 
-                ffprobe.on('close', (probeCode: number | null) => {
+                ffprobe.on('close', (probeCode) => {
                   if (probeCode === 0 && durationOutput.trim()) {
                     const duration = parseFloat(durationOutput.trim());
                     const minutes = Math.floor(duration / 60);
