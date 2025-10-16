@@ -309,9 +309,18 @@ class YtDlpService {
         
         args.push('-f', formatString);
         
-        // Force merge to MP4 container
-        // This merges separate video+audio streams into a single MP4 file
+        // Force merge to MP4
         args.push('--merge-output-format', 'mp4');
+        
+        // CRITICAL: Use postprocessor to convert video to proper MP4 with H.264 codec
+        // This is more reliable than --recode-video on production servers
+        args.push('--postprocessor-args', 'ffmpeg:-c:v libx264 -c:a aac');
+        
+        // Force remux or recode to MP4 if needed
+        args.push('--remux-video', 'mp4');  // Try remux first (faster)
+        
+        // Clean up intermediate files after merge/recode (keep only final output)
+        args.push('--no-keep-video');  // Delete original video files after recoding
         
         console.log(`[ytdlpService] Format string: ${formatString}`);
         logger.info(`Format string: ${formatString}`);
@@ -420,23 +429,8 @@ class YtDlpService {
       ytdlpProcess.on('close', (code) => {
         if (code === 0) {
           logger.info('yt-dlp download completed successfully');
-          logger.info(`[ytdlpService] Checking if output file exists: ${outputPath}`);
-          
-          // Wait a moment for file system operations to complete
-          setTimeout(() => {
-            const { existsSync, statSync } = require('fs');
-            
-            if (existsSync(outputPath)) {
-              const stats = statSync(outputPath);
-              logger.info(`[ytdlpService] Output file exists, size: ${stats.size} bytes`);
-            } else {
-              logger.warn(`[ytdlpService] Output file does NOT exist at: ${outputPath}`);
-              logger.warn(`[ytdlpService] File might be created with different name (e.g., .temp.mp4)`);
-            }
-            
-            if (onProgress) onProgress(100, '00:00', 'Complete');
-            resolve(outputPath);
-          }, 1000); // Wait 1 second for file operations
+          if (onProgress) onProgress(100, '00:00', 'Complete');
+          resolve(outputPath);
         } else {
           logger.error('yt-dlp failed:', stderr);
           reject(new Error(`Download failed with code ${code}`));
@@ -477,6 +471,11 @@ class YtDlpService {
       
       args.push('-f', formatString);
       args.push('--merge-output-format', 'mp4');
+      // Force proper MP4 encoding (same as downloadVideo method)
+      args.push('--postprocessor-args', 'ffmpeg:-c:v libx264 -c:a aac');
+      args.push('--remux-video', 'mp4');
+      // Clean up intermediate files
+      args.push('--no-keep-video');
     }
 
     args.push(url);
