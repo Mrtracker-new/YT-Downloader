@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { ThemeProvider, createTheme, CssBaseline, Container, Box, Typography, Paper } from '@mui/material';
+import { ThemeProvider, createTheme, CssBaseline, Container, Box, Typography, Paper, AppBar, Toolbar, IconButton } from '@mui/material';
 import { Toaster } from 'react-hot-toast';
+import { YouTube, GitHub } from '@mui/icons-material';
 import VideoInput from './components/VideoInput';
 import VideoPreview from './components/VideoPreview';
 import DownloadControls from './components/DownloadControls';
@@ -13,37 +14,47 @@ function App() {
     palette: {
       mode: 'dark',
       primary: {
-        main: '#DC2626', // Red-600
-        dark: '#B91C1C', // Red-700
-        light: '#EF4444', // Red-500
+        main: '#3B82F6', // Blue-500 (Professional, Trustworthy)
+        dark: '#2563EB', // Blue-600
+        light: '#60A5FA', // Blue-400
       },
       secondary: {
-        main: '#EF4444', // Red-500
-        dark: '#DC2626', // Red-600
-        light: '#F87171', // Red-400
+        main: '#64748B', // Slate-500
+        dark: '#475569', // Slate-600
+        light: '#94A3B8', // Slate-400
       },
       background: {
-        default: '#0A0A0A', // Nearly black
-        paper: '#1A1A1A', // Dark gray
+        default: '#09090b', // Zinc-950 (Rich dark black)
+        paper: '#18181b',   // Zinc-900 (Background card)
       },
       text: {
-        primary: '#FFFFFF',
-        secondary: '#A0A0A0',
+        primary: '#F4F4F5', // Zinc-100
+        secondary: '#A1A1AA', // Zinc-400
       },
       error: {
-        main: '#DC2626',
+        main: '#EF4444', // Red-500 (Standard error, not branded)
       },
       success: {
-        main: '#10B981',
+        main: '#10B981', // Emerald-500
       },
+    },
+    typography: {
+      fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+      h1: { fontWeight: 700 },
+      h2: { fontWeight: 700 },
+      h3: { fontWeight: 600 },
+      button: { fontWeight: 600, textTransform: 'none' },
+    },
+    shape: {
+      borderRadius: 12, // Modern soft corners
     },
     components: {
       MuiPaper: {
         styleOverrides: {
           root: {
             backgroundImage: 'none',
-            borderRadius: '12px',
-            border: '1px solid rgba(220, 38, 38, 0.2)',
+            border: '1px solid #27272a', // Zinc-800
+            boxShadow: 'none', // Flat design
           },
         },
       },
@@ -53,13 +64,17 @@ function App() {
             borderRadius: '8px',
             textTransform: 'none',
             fontWeight: 600,
-          },
-          contained: {
-            boxShadow: '0 4px 14px 0 rgba(220, 38, 38, 0.4)',
+            boxShadow: 'none',
             '&:hover': {
-              boxShadow: '0 6px 20px rgba(220, 38, 38, 0.6)',
+              boxShadow: 'none',
             },
           },
+          contained: {
+            // Subtle elevation on hover only for primary actions
+            '&:hover': {
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+            }
+          }
         },
       },
       MuiTextField: {
@@ -67,187 +82,137 @@ function App() {
           root: {
             '& .MuiOutlinedInput-root': {
               '& fieldset': {
-                borderColor: 'rgba(220, 38, 38, 0.3)',
+                borderColor: '#3f3f46', // Zinc-700
               },
               '&:hover fieldset': {
-                borderColor: 'rgba(220, 38, 38, 0.5)',
+                borderColor: '#52525b', // Zinc-600
               },
               '&.Mui-focused fieldset': {
-                borderColor: '#DC2626',
+                borderColor: '#3B82F6', // Primary Blue
               },
             },
           },
         },
       },
-      MuiCard: {
+      MuiAppBar: {
         styleOverrides: {
           root: {
+            backgroundColor: 'rgba(9, 9, 11, 0.8)', // Semi-transparent default background
+            backdropFilter: 'blur(12px)',
+            borderBottom: '1px solid #27272a',
             backgroundImage: 'none',
-            border: '1px solid rgba(220, 38, 38, 0.2)',
-          },
-        },
-      },
+            boxShadow: 'none',
+          }
+        }
+      }
     },
   });
 
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Toaster 
-        position="top-right"
+      <Toaster
+        position="bottom-center" // Less intrusive
         toastOptions={{
+          style: {
+            background: '#18181b', // Zinc-900
+            color: '#f4f4f5',
+            border: '1px solid #27272a',
+            padding: '12px 16px',
+            borderRadius: '8px',
+          },
           success: {
-            className: 'toast-success',
-            iconTheme: {
-              primary: '#10B981',
-              secondary: '#1A1A1A',
-            },
+            iconTheme: { primary: '#10B981', secondary: '#18181b' },
           },
           error: {
-            className: 'toast-error',
-            iconTheme: {
-              primary: '#EF4444',
-              secondary: '#1A1A1A',
-            },
-          },
-          loading: {
-            className: 'toast-loading',
-            iconTheme: {
-              primary: '#DC2626',
-              secondary: '#1A1A1A',
-            },
+            iconTheme: { primary: '#EF4444', secondary: '#18181b' },
           },
         }}
       />
-      
-      <Box sx={{ 
+
+      {/* Minimal Navbar */}
+      <AppBar position="fixed">
+        <Container maxWidth="md">
+          <Toolbar disableGutters sx={{ justifyContent: 'space-between', minHeight: '64px' }}>
+            <Box display="flex" alignItems="center" gap={1.5}>
+              <YouTube sx={{ color: '#EF4444', fontSize: 28 }} />
+              <Typography variant="h6" color="text.primary" fontWeight={700}>
+                YT Downloader
+              </Typography>
+            </Box>
+
+            <IconButton
+              color="inherit"
+              component="a"
+              href="https://github.com/Mrtracker-new/YT-Downloader"
+              target="_blank"
+              sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
+            >
+              <GitHub />
+            </IconButton>
+          </Toolbar>
+        </Container>
+      </AppBar>
+
+      <Box sx={{
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, #0A0A0A 0%, #1A0A0A 50%, #0A0A0A 100%)',
+        pt: '120px', // Header offset
+        pb: 8,
       }}>
-        <Container maxWidth="md" sx={{ py: 4 }}>
-          <Box textAlign="center" mb={4}>
-            <Typography 
-              variant="h3" 
-              component="h1" 
-              gutterBottom 
-              fontWeight="bold"
-              sx={{
-                background: 'linear-gradient(135deg, #DC2626 0%, #EF4444 100%)',
+        <Container maxWidth="md">
+          {/* Main Content Area */}
+          <Box display="flex" flexDirection="column" gap={4}>
+
+            {/* Hero / Input Section */}
+            <Box textAlign="center" mb={2}>
+              <Typography variant="h3" component="h1" gutterBottom sx={{
+                mb: 1,
+                background: 'linear-gradient(to right, #fff, #a1a1aa)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
-                mb: 2,
-              }}
-            >
-              🎥 YouTube Downloader
-            </Typography>
-            <Typography variant="subtitle1" color="text.secondary" sx={{ mb: 1 }}>
-              Download YouTube videos in various qualities and formats
-            </Typography>
-          </Box>
+              }}>
+                Download YouTube Videos
+              </Typography>
+              <Typography variant="body1" color="text.secondary" sx={{ maxWidth: '480px', mx: 'auto' }}>
+                Paste a link below to save videos in HD, 4K, or generic audio formats.
+              </Typography>
+            </Box>
 
-          <Paper elevation={3} sx={{ 
-            p: 4, 
-            borderRadius: 3,
-            background: 'linear-gradient(135deg, #1A1A1A 0%, #0F0F0F 100%)',
-            boxShadow: '0 8px 32px rgba(220, 38, 38, 0.15)',
-          }}>
-          <VideoInput 
-            onVideoInfo={setVideoInfo}
-          />
+            {/* Input Card */}
+            <Paper sx={{ p: 0, overflow: 'hidden', border: 'none', background: 'transparent' }}>
+              <VideoInput onVideoInfo={setVideoInfo} />
+            </Paper>
 
-          {videoInfo && (
-            <>
-              <Box mt={4}>
-                <VideoPreview videoInfo={videoInfo} />
+            {/* Results Section */}
+            {videoInfo && (
+              <Box sx={{
+                display: 'grid',
+                gap: 3,
+                gridTemplateColumns: { xs: '1fr', md: '1fr' }, // Stacked for now, can be side-by-side
+                animation: 'fadeIn 0.5s ease-out',
+                '@keyframes fadeIn': {
+                  '0%': { opacity: 0, transform: 'translateY(10px)' },
+                  '100%': { opacity: 1, transform: 'translateY(0)' }
+                }
+              }}>
+                <Paper sx={{ p: 3, background: '#18181b' }}>
+                  <VideoPreview videoInfo={videoInfo} />
+                  <Box mt={4}>
+                    <DownloadControls videoInfo={videoInfo} />
+                  </Box>
+                </Paper>
               </Box>
-              
-              <Box mt={4}>
-                <DownloadControls videoInfo={videoInfo} />
-              </Box>
-            </>
-          )}
-        </Paper>
+            )}
 
-          <Box mt={4} textAlign="center">
-            <Typography 
-              variant="caption" 
-              sx={{ 
-                color: 'rgba(220, 38, 38, 0.6)',
-                fontWeight: 500,
-              }}
-            >
-              ⚠️ This tool is for educational purposes only. Please respect copyright laws.
-            </Typography>
-          </Box>
-
-          {/* Author Credits */}
-          <Box 
-            mt={4} 
-            pt={3} 
-            borderTop="1px solid rgba(220, 38, 38, 0.2)"
-            textAlign="center"
-          >
-            <Typography 
-              variant="body2" 
-              sx={{ 
-                mb: 1,
-              }}
-            >
-              Created by{' '}
-              <Box
-                component="a"
-                href="https://rolan-rnr.netlify.app/"
-                target="_blank"
-                rel="noopener noreferrer"
-                sx={{
-                  color: '#EF4444',
-                  fontWeight: 600,
-                  textDecoration: 'none',
-                  position: 'relative',
-                  transition: 'all 0.3s ease',
-                  '&:hover': {
-                    color: '#DC2626',
-                    textShadow: '0 0 8px rgba(220, 38, 38, 0.5)',
-                  },
-                  '&::after': {
-                    content: '""',
-                    position: 'absolute',
-                    bottom: -2,
-                    left: 0,
-                    width: 0,
-                    height: '2px',
-                    background: 'linear-gradient(90deg, #DC2626, #EF4444)',
-                    transition: 'width 0.3s ease',
-                  },
-                  '&:hover::after': {
-                    width: '100%',
-                  },
-                }}
-              >
-                Rolan (RNR)
-              </Box>
-            </Typography>
-            <Typography 
-              variant="caption" 
-              sx={{ 
-                color: 'rgba(220, 38, 38, 0.7)',
-                display: 'block',
-                mb: 0.5,
-              }}
-            >
-              Built with React + Node.js + yt-dlp
-            </Typography>
-            <Typography 
-              variant="caption" 
-              sx={{ 
-                color: 'rgba(220, 38, 38, 0.5)',
-                display: 'block',
-              }}
-            >
-              © {new Date().getFullYear()} All rights reserved
-            </Typography>
           </Box>
         </Container>
+      </Box>
+
+      {/* Subtle Footer */}
+      <Box component="footer" py={4} textAlign="center" borderTop="1px solid #27272a">
+        <Typography variant="caption" color="text.secondary">
+          © {new Date().getFullYear()} YT Downloader • Educational Purpose Only
+        </Typography>
       </Box>
     </ThemeProvider>
   );
