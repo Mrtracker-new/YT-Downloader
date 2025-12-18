@@ -48,14 +48,33 @@ class YtDlpService {
    * Initialize cookies from base64-encoded environment variable
    */
   private initializeCookies(): void {
-    const cookiesBase64 = process.env.YOUTUBE_COOKIES_BASE64;
+    let cookiesBase64 = process.env.YOUTUBE_COOKIES_BASE64;
 
     if (cookiesBase64) {
       try {
         console.log('[ytdlpService] Found YOUTUBE_COOKIES_BASE64 environment variable');
 
+        // Robustness: Strip "YOUTUBE_COOKIES_BASE64=" prefix if present (common copy-paste error)
+        if (cookiesBase64.trim().startsWith('YOUTUBE_COOKIES_BASE64')) {
+          console.log('[ytdlpService] Stripping "YOUTUBE_COOKIES_BASE64" prefix from environment variable');
+          cookiesBase64 = cookiesBase64.trim().replace('YOUTUBE_COOKIES_BASE64', '');
+        }
+
+        // Strip surrounding quotes if present
+        cookiesBase64 = cookiesBase64.trim();
+        if ((cookiesBase64.startsWith('"') && cookiesBase64.endsWith('"')) ||
+          (cookiesBase64.startsWith("'") && cookiesBase64.endsWith("'"))) {
+          cookiesBase64 = cookiesBase64.slice(1, -1);
+        }
+
         // Decode base64 cookies
         const cookiesContent = Buffer.from(cookiesBase64, 'base64').toString('utf-8');
+
+        // Validation: basic check for Netscape format or Google domain
+        if (!cookiesContent.includes('# Netscape HTTP Cookie File') && !cookiesContent.includes('.google.com')) {
+          console.warn('[ytdlpService] WARNING: Decoded cookies do not contain Netscape header or recognized domain. May be invalid.');
+          logger.warn('WARNING: Decoded cookies do not contain Netscape header or recognized domain.');
+        }
 
         // Create temporary cookies file
         this.cookiesFile = join(tmpdir(), `yt-cookies-${Date.now()}.txt`);
