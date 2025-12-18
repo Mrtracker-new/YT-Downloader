@@ -50,14 +50,14 @@ export interface ApiResponse<T> {
  */
 export const getQuickVideoInfo = async (url: string): Promise<Partial<VideoInfo>> => {
   const cacheKey = `quick:${url}`;
-  
+
   // Check if there's already a pending request for this URL
   const cached = requestCache.get(cacheKey);
   if (cached) {
     console.log('⚡ Returning cached quick preview for:', url);
     return cached;
   }
-  
+
   // Create new request and cache it
   const requestPromise = api.post<ApiResponse<Partial<VideoInfo>>>('/api/video/quick-info', { url })
     .then(response => {
@@ -70,7 +70,7 @@ export const getQuickVideoInfo = async (url: string): Promise<Partial<VideoInfo>
       // Remove from cache after timeout
       setTimeout(() => requestCache.delete(cacheKey), cacheTimeout);
     });
-  
+
   requestCache.set(cacheKey, requestPromise);
   return requestPromise;
 };
@@ -80,14 +80,14 @@ export const getQuickVideoInfo = async (url: string): Promise<Partial<VideoInfo>
  */
 export const getVideoInfo = async (url: string): Promise<VideoInfo> => {
   const cacheKey = `info:${url}`;
-  
+
   // Check if there's already a pending request for this URL
   const cached = requestCache.get(cacheKey);
   if (cached) {
     console.log('⚡ Returning cached/pending request for:', url);
     return cached;
   }
-  
+
   // Create new request and cache it
   const requestPromise = api.post<ApiResponse<VideoInfo>>('/api/video/info', { url })
     .then(response => {
@@ -100,7 +100,7 @@ export const getVideoInfo = async (url: string): Promise<VideoInfo> => {
       // Remove from cache after timeout
       setTimeout(() => requestCache.delete(cacheKey), cacheTimeout);
     });
-  
+
   requestCache.set(cacheKey, requestPromise);
   return requestPromise;
 };
@@ -135,10 +135,10 @@ export const getQualityOptions = async (url: string) => {
  * Download video with progress tracking
  */
 export const downloadVideo = async (
-  url: string, 
-  quality: string, 
+  url: string,
+  quality: string,
   audioOnly: boolean,
-  onProgress?: (progress: { progress: number; speed: string; eta: string; done?: boolean }) => void
+  onProgress?: (progress: { progress: number; speed: string; eta: string; done?: boolean; status?: string }) => void
 ): Promise<void> => {
   try {
     // Step 1: Start the download and get download ID
@@ -164,17 +164,17 @@ export const downloadVideo = async (
     if (onProgress) {
       const eventSource = new EventSource(`${API_BASE_URL}/api/video/progress/${downloadId}`);
       let lastProgressTime = Date.now();
-      
+
       eventSource.onopen = () => {
         console.log('✅ Progress tracking connected');
       };
-      
+
       eventSource.onmessage = (event) => {
         try {
           const progressData = JSON.parse(event.data);
           lastProgressTime = Date.now();
           onProgress(progressData);
-          
+
           if (progressData.progress >= 100 || progressData.done) {
             console.log('✅ Download complete');
             progressComplete = true;
@@ -184,14 +184,14 @@ export const downloadVideo = async (
           console.error('❌ Progress parsing error:', error);
         }
       };
-      
+
       eventSource.onerror = (error) => {
         // Check if we received the completion signal
         if (progressComplete) {
           eventSource.close();
           return;
         }
-        
+
         // Check if we haven't received updates for a while but might be complete
         const timeSinceLastUpdate = Date.now() - lastProgressTime;
         if (timeSinceLastUpdate > 5000) {
@@ -200,12 +200,12 @@ export const downloadVideo = async (
           eventSource.close();
           return;
         }
-        
+
         console.error('❌ Connection error:', error);
         // Don't immediately fail - the download might still be in progress
         // The polling mechanism below will handle checking completion
       };
-      
+
       // Fallback: Close after 10 minutes
       setTimeout(() => {
         eventSource.close();
@@ -257,105 +257,36 @@ export const downloadVideo = async (
     await new Promise(resolve => setTimeout(resolve, 2000));
 
     // Step 4: Retrieve the downloaded file
-    // Use a longer timeout for large file downloads (10 minutes)
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minute timeout
-    
-    const fileResponse = await fetch(`${API_BASE_URL}/api/video/file/${downloadId}`, {
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeoutId);
-    
-    if (!fileResponse.ok) {
-      throw new Error('Failed to retrieve file');
-    }
+    // Use window.location to trigger browser's native download
+    // This avoids loading the entire file into memory (Blob) which crashes on large files
+    console.log(`Redirecting to file: ${API_BASE_URL}/api/video/file/${downloadId}`);
 
-    // Extract filename from Content-Disposition header
-    const contentDisposition = fileResponse.headers.get('content-disposition');
-    let downloadFilename = filename; // Use filename from initial response
-    
-    console.log('Content-Disposition header:', contentDisposition);
-    console.log('Filename from initial response:', filename);
-    
-    if (contentDisposition) {
-      // Try to extract RFC 5987 format first (filename*=UTF-8''...)
-      const rfc5987Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/);
-      if (rfc5987Match && rfc5987Match[1]) {
-        downloadFilename = decodeURIComponent(rfc5987Match[1]);
-      } else {
-        // Fallback to standard format (filename="...")
-        const standardMatch = contentDisposition.match(/filename="([^"]+)"/);
-        if (standardMatch && standardMatch[1]) {
-          downloadFilename = standardMatch[1];
-        }
-      }
-    }
-    
-    console.log('Final filename to download:', downloadFilename);
-    console.log('File size:', fileResponse.headers.get('content-length'), 'bytes');
+    // Create a temporary link to force download
+    // We can't use window.location.href directly efficiently for tracking completion,
+    // but since we already waited for progress to complete, the file is ready.
+    const downloadUrl = `${API_BASE_URL}/api/video/file/${downloadId}`;
 
-    // Stream the file in chunks to avoid memory issues with large files
-    const reader = fileResponse.body?.getReader();
-    if (!reader) {
-      throw new Error('Failed to get response reader');
-    }
-
-    const chunks: BlobPart[] = [];
-    let receivedLength = 0;
-    const contentLength = parseInt(fileResponse.headers.get('content-length') || '0');
-
-    console.log('Starting to read file stream...');
-    
-    while (true) {
-      const { done, value } = await reader.read();
-      
-      if (done) {
-        console.log('Stream complete!');
-        break;
-      }
-      
-      if (value) {
-        chunks.push(value);
-        receivedLength += value.length;
-      }
-      
-      // Log progress for large files
-      if (contentLength > 0) {
-        const percent = (receivedLength / contentLength * 100).toFixed(1);
-        console.log(`Receiving file: ${percent}% (${receivedLength}/${contentLength} bytes)`);
-      }
-    }
-
-    console.log(`Total received: ${receivedLength} bytes`);
-    
-    // Combine chunks into a single blob
-    const blob = new Blob(chunks, { 
-      type: filename.endsWith('.mp3') ? 'audio/mpeg' : 'video/mp4' 
-    });
-    
-    console.log('Created blob of size:', blob.size, 'bytes');
-
-    // Create download link and trigger download
-    const downloadUrl = window.URL.createObjectURL(blob);
+    // Create invisible iframe or link to trigger download without navigation
     const link = document.createElement('a');
     link.href = downloadUrl;
-    link.download = downloadFilename;
+    link.setAttribute('download', filename); // Hint filename
+    link.style.display = 'none';
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(downloadUrl);
+
+    // Cleanup
+    setTimeout(() => {
+      document.body.removeChild(link);
+    }, 1000);
+
+    return; // Done
   } catch (error) {
     console.error('Download error details:', error);
     if (axios.isAxiosError(error)) {
       const errorMsg = error.response?.data?.error || error.message || 'Download failed';
-      console.error('Axios error:', errorMsg, error.response?.data);
       throw new Error(errorMsg);
     }
-    if (error instanceof Error) {
-      throw new Error(error.message || 'Download failed');
-    }
-    throw new Error('Download failed');
+    throw error;
   }
 };
 
