@@ -105,11 +105,13 @@ class YtDlpService {
       args.push('--cookies', this.cookiesFile);
       console.log('[ytdlpService] Using cookies for authentication');
     } else {
-      // Use web client (default) for full format availability
-      // Don't specify player_client to let yt-dlp choose the best one
-      // This ensures we get all available formats including HD/4K
-      console.log('[ytdlpService] Using default web client for full format access');
+      console.log('[ytdlpService] Using default client logic (cookie-free)');
     }
+
+    // Bot Mitigation: Impersonate iOS app to bypass "Sign in to confirm" errors
+    // This is more lenient with IP mismatches than the 'web' client
+    args.push('--extractor-args', 'youtube:player_client=ios');
+    args.push('--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1');
 
     return args;
   }
