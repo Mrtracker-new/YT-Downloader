@@ -55,9 +55,10 @@ class YtDlpService {
         console.log('[ytdlpService] Found YOUTUBE_COOKIES_BASE64 environment variable');
 
         // Robustness: Strip "YOUTUBE_COOKIES_BASE64=" prefix if present (common copy-paste error)
-        if (cookiesBase64.trim().startsWith('YOUTUBE_COOKIES_BASE64')) {
+        const prefixRegex = /^YOUTUBE_COOKIES_BASE64=?\s*/;
+        if (prefixRegex.test(cookiesBase64.trim())) {
           console.log('[ytdlpService] Stripping "YOUTUBE_COOKIES_BASE64" prefix from environment variable');
-          cookiesBase64 = cookiesBase64.trim().replace('YOUTUBE_COOKIES_BASE64', '');
+          cookiesBase64 = cookiesBase64.trim().replace(prefixRegex, '');
         }
 
         // Strip surrounding quotes if present
