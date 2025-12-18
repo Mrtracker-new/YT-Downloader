@@ -108,10 +108,9 @@ class YtDlpService {
       console.log('[ytdlpService] Using default client logic (cookie-free)');
     }
 
-    // Bot Mitigation: Impersonate iOS app to bypass "Sign in to confirm" errors
-    // This is more lenient with IP mismatches than the 'web' client
-    args.push('--extractor-args', 'youtube:player_client=ios');
-    args.push('--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1');
+    // Bot Mitigation: Impersonate Android app to bypass "Sign in to confirm" errors
+    // Android is often more robust than iOS and handles its own User-Agent
+    args.push('--extractor-args', 'youtube:player_client=android');
 
     return args;
   }
