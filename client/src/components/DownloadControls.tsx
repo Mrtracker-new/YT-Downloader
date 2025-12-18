@@ -1,19 +1,19 @@
 import { useState } from 'react';
 import {
   Box,
-  FormControl,
-  FormLabel,
-  RadioGroup,
-  FormControlLabel,
-  Radio,
-  Select,
-  MenuItem,
   Button,
-  CircularProgress,
   Typography,
   LinearProgress,
+  ToggleButton,
+  ToggleButtonGroup,
+  Grid,
+  Fade,
 } from '@mui/material';
-import { Download as DownloadIcon } from '@mui/icons-material';
+import {
+  Download as DownloadIcon,
+  Audiotrack,
+  Videocam
+} from '@mui/icons-material';
 import toast from 'react-hot-toast';
 import { downloadVideo as downloadVideoApi, VideoInfo } from '../services/api';
 
@@ -21,24 +21,12 @@ interface DownloadControlsProps {
   videoInfo: VideoInfo;
 }
 
-// Helper function to format download speed
 const formatSpeed = (speed: string): string => {
   if (!speed || speed === '0' || speed === 'Unknown') return '';
-  
-  // yt-dlp returns speeds like "2.5MiB/s" or "500KiB/s"
-  // Convert MiB to MB and KiB to KB for better readability
-  if (speed.includes('MiB/s')) {
-    const value = parseFloat(speed);
-    return `${value.toFixed(2)} MB/s`;
-  } else if (speed.includes('KiB/s')) {
-    const value = parseFloat(speed);
-    return `${value.toFixed(0)} KB/s`;
-  } else if (speed.includes('GiB/s')) {
-    const value = parseFloat(speed);
-    return `${value.toFixed(2)} GB/s`;
-  }
-  
-  return speed; // Return as-is if format is unknown
+  if (speed.includes('MiB/s')) return `${parseFloat(speed).toFixed(2)} MB/s`;
+  if (speed.includes('KiB/s')) return `${parseFloat(speed).toFixed(0)} KB/s`;
+  if (speed.includes('GiB/s')) return `${parseFloat(speed).toFixed(2)} GB/s`;
+  return speed;
 };
 
 const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
@@ -50,56 +38,58 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
   const [eta, setEta] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
 
-  // Get actual available qualities from video info
   const actualAvailableQualities = videoInfo.availableQualities || [];
-  
-  // Quality label mapping for better display
+
   const qualityLabelMap: Record<string, string> = {
-    '2160p': '4K (2160p)',
-    '1440p': '2K (1440p)',
-    '1080p': 'Full HD (1080p)',
-    '720p': 'HD (720p)',
-    '480p': 'SD (480p)',
+    '2160p': '4K',
+    '1440p': '2K',
+    '1080p': '1080p',
+    '720p': '720p',
+    '480p': '480p',
     '360p': '360p',
     '240p': '240p',
     '144p': '144p',
   };
-  
-  // Build quality options - ONLY show actual available qualities
-  const videoQualities = actualAvailableQualities.map(quality => ({
-    label: qualityLabelMap[quality] || quality,
-    value: quality
+
+  const videoQualities = actualAvailableQualities.map(q => ({
+    label: qualityLabelMap[q] || q,
+    value: q
   }));
+
+  const handleFormatChange = (_event: React.MouseEvent<HTMLElement>, newFormat: string | null) => {
+    if (newFormat !== null) {
+      setAudioOnly(newFormat === 'audio');
+    }
+  };
 
   const handleDownload = async () => {
     setDownloading(true);
     setProgress(0);
     setDownloadSpeed('');
     setEta('');
-    setStatusMessage('Starting download...');
+    setStatusMessage('Starting...');
     const toastId = toast.loading(audioOnly ? 'Downloading audio...' : 'Downloading video...');
 
     try {
-      // Construct URL from videoId
       const url = `https://www.youtube.com/watch?v=${videoInfo.videoId}`;
-      
-      // Start download with progress tracking
+
       await downloadVideoApi(url, quality, audioOnly, (progressData) => {
         setProgress(progressData.progress);
         setDownloadSpeed(progressData.speed);
         setEta(progressData.eta);
-        
-        // Update status message based on progress
-        if (progressData.progress >= 100 || progressData.done) {
-          setStatusMessage('Preparing your file...');
+
+        if (progressData.status && progressData.status !== 'Downloading') {
+          setStatusMessage(progressData.status);
+        } else if (progressData.progress >= 100 || progressData.done) {
+          setStatusMessage('Processing...');
         } else {
-          setStatusMessage('Downloading...');
+          setStatusMessage(`${Math.round(progressData.progress)}%`);
         }
       });
-      
+
       toast.success('Download completed!', { id: toastId });
       setProgress(100);
-      setStatusMessage('');
+      setStatusMessage('Done');
     } catch (error) {
       toast.error((error as Error).message || 'Download failed', { id: toastId });
       console.error('Download error:', error);
@@ -110,182 +100,148 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
         setDownloadSpeed('');
         setEta('');
         setStatusMessage('');
-      }, 2000);
+      }, 3000);
     }
   };
 
   return (
     <Box>
-      <FormControl component="fieldset" fullWidth>
-        <FormLabel 
-          component="legend"
-          sx={{ 
-            color: '#EF4444',
-            fontWeight: 600,
-            '&.Mui-focused': {
-              color: '#DC2626',
+      <Box mb={4}>
+        <Typography variant="subtitle2" color="text.secondary" gutterBottom fontWeight={600} sx={{ textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em' }}>
+          Format
+        </Typography>
+        <ToggleButtonGroup
+          value={audioOnly ? 'audio' : 'video'}
+          exclusive
+          onChange={handleFormatChange}
+          fullWidth
+          sx={{
+            bgcolor: '#18181b',
+            border: '1px solid #27272a',
+            borderRadius: '12px',
+            p: 0.5,
+            '& .MuiToggleButton-root': {
+              border: 0,
+              borderRadius: '8px',
+              color: 'text.secondary',
+              textTransform: 'none',
+              fontWeight: 600,
+              py: 1,
+              '&.Mui-selected': {
+                bgcolor: '#27272a',
+                color: '#fff',
+                '&:hover': {
+                  bgcolor: '#3f3f46',
+                },
+              },
             },
           }}
         >
-          Format
-        </FormLabel>
-        <RadioGroup
-          row
-          value={audioOnly ? 'audio' : 'video'}
-          onChange={(e) => setAudioOnly(e.target.value === 'audio')}
-        >
-          <FormControlLabel 
-            value="video" 
-            control={
-              <Radio 
-                sx={{
-                  color: 'rgba(220, 38, 38, 0.5)',
-                  '&.Mui-checked': {
-                    color: '#DC2626',
-                  },
-                }}
-              />
-            } 
-            label="Video" 
-          />
-          <FormControlLabel 
-            value="audio" 
-            control={
-              <Radio 
-                sx={{
-                  color: 'rgba(220, 38, 38, 0.5)',
-                  '&.Mui-checked': {
-                    color: '#DC2626',
-                  },
-                }}
-              />
-            } 
-            label="Audio Only" 
-          />
-        </RadioGroup>
-      </FormControl>
+          <ToggleButton value="video">
+            <Videocam sx={{ mr: 1, fontSize: 20 }} /> Video
+          </ToggleButton>
+          <ToggleButton value="audio">
+            <Audiotrack sx={{ mr: 1, fontSize: 20 }} /> Audio Only
+          </ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
 
       {!audioOnly && videoQualities.length > 0 && (
-        <FormControl fullWidth sx={{ mt: 2 }}>
-          <FormLabel
-            sx={{ 
-              color: '#EF4444',
-              fontWeight: 600,
-              '&.Mui-focused': {
-                color: '#DC2626',
-              },
-            }}
-          >
+        <Box mb={4}>
+          <Typography variant="subtitle2" color="text.secondary" gutterBottom fontWeight={600} sx={{ textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em' }}>
             Quality
-          </FormLabel>
-          <Select
-            value={quality}
-            onChange={(e) => setQuality(e.target.value)}
-            disabled={downloading}
-            sx={{
-              '& .MuiOutlinedInput-notchedOutline': {
-                borderColor: 'rgba(220, 38, 38, 0.3)',
-              },
-              '&:hover .MuiOutlinedInput-notchedOutline': {
-                borderColor: 'rgba(220, 38, 38, 0.5)',
-              },
-              '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                borderColor: '#DC2626',
-              },
-            }}
-          >
+          </Typography>
+          <Grid container spacing={1}>
             {videoQualities.map((q) => (
-              <MenuItem key={q.value} value={q.value}>
-                {q.label}
-              </MenuItem>
+              <Grid item xs={4} sm={3} key={q.value}>
+                <Button
+                  fullWidth
+                  variant={quality === q.value ? 'contained' : 'outlined'}
+                  onClick={() => setQuality(q.value)}
+                  disabled={downloading}
+                  sx={{
+                    borderRadius: '8px',
+                    py: 1,
+                    border: quality === q.value ? 'none' : '1px solid #27272a',
+                    bgcolor: quality === q.value ? 'primary.main' : 'transparent',
+                    color: quality === q.value ? '#fff' : 'text.secondary',
+                    '&:hover': {
+                      bgcolor: quality === q.value ? 'primary.dark' : '#27272a',
+                      border: quality === q.value ? 'none' : '1px solid #3f3f46',
+                    }
+                  }}
+                >
+                  {q.label}
+                </Button>
+              </Grid>
             ))}
-          </Select>
-        </FormControl>
+          </Grid>
+        </Box>
       )}
 
+      {/* Main Action */}
       <Button
         fullWidth
         variant="contained"
         size="large"
-        startIcon={downloading ? <CircularProgress size={20} color="inherit" /> : <DownloadIcon />}
         disabled={downloading}
         onClick={handleDownload}
-        sx={{ 
-          mt: 3,
-          py: 1.5,
-          fontSize: '1.1rem',
-          fontWeight: 700,
-          background: 'linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)',
-          boxShadow: '0 4px 14px 0 rgba(220, 38, 38, 0.4)',
-          transition: 'all 0.3s ease',
+        sx={{
+          py: 2,
+          fontSize: '1rem',
+          borderRadius: '12px',
+          bgcolor: '#fff', // High contrast white button for dark mode
+          color: '#000',
           '&:hover': {
-            background: 'linear-gradient(135deg, #B91C1C 0%, #991B1B 100%)',
-            boxShadow: '0 6px 20px rgba(220, 38, 38, 0.6)',
-            transform: 'translateY(-2px)',
-          },
-          '&:active': {
-            transform: 'translateY(0)',
+            bgcolor: '#f4f4f5',
           },
           '&.Mui-disabled': {
-            background: 'rgba(220, 38, 38, 0.3)',
-          },
+            bgcolor: '#27272a',
+            color: '#52525b',
+          }
         }}
       >
-        {downloading ? (statusMessage || 'Downloading...') : `Download ${audioOnly ? 'Audio (MP3)' : `Video (${quality})`}`}
+        {downloading ? (
+          <Box display="flex" alignItems="center" gap={2}>
+            <Typography variant="body2" fontWeight={600}>
+              {statusMessage}
+            </Typography>
+          </Box>
+        ) : (
+          <>
+            <DownloadIcon sx={{ mr: 1 }} />
+            Download {audioOnly ? 'Audio' : quality}
+          </>
+        )}
       </Button>
 
       {/* Progress Bar */}
       {downloading && (
-        <Box mt={2}>
-          <LinearProgress 
-            variant="determinate" 
-            value={progress} 
-            sx={{
-              height: 8,
-              borderRadius: 4,
-              backgroundColor: 'rgba(220, 38, 38, 0.2)',
-              '& .MuiLinearProgress-bar': {
-                borderRadius: 4,
-                background: 'linear-gradient(90deg, #DC2626 0%, #EF4444 100%)',
-              },
-            }}
-          />
-          <Box display="flex" justifyContent="space-between" mt={1}>
-            <Typography 
-              variant="caption" 
-              sx={{ 
-                color: '#EF4444',
-                fontWeight: 600,
+        <Fade in={downloading}>
+          <Box mt={2}>
+            <LinearProgress
+              variant="determinate"
+              value={progress}
+              sx={{
+                height: 4,
+                borderRadius: 2,
+                bgcolor: '#27272a',
+                '& .MuiLinearProgress-bar': {
+                  bgcolor: '#fff',
+                },
               }}
-            >
-              {progress.toFixed(1)}%
-            </Typography>
-            {downloadSpeed && formatSpeed(downloadSpeed) && (
-              <Typography 
-                variant="caption" 
-                sx={{ 
-                  color: 'rgba(220, 38, 38, 0.8)',
-                  fontWeight: 500,
-                }}
-              >
-                {formatSpeed(downloadSpeed)} {eta && eta !== 'Unknown' && `• ETA: ${eta}`}
+            />
+            <Box display="flex" justifyContent="space-between" mt={1}>
+              <Typography variant="caption" color="text.secondary">
+                {downloadSpeed && formatSpeed(downloadSpeed)}
               </Typography>
-            )}
+              <Typography variant="caption" color="text.secondary">
+                {eta && `ETA: ${eta}`}
+              </Typography>
+            </Box>
           </Box>
-        </Box>
+        </Fade>
       )}
-
-      <Box mt={2} textAlign="center">
-        <Typography 
-          variant="caption" 
-          sx={{ 
-            color: 'rgba(220, 38, 38, 0.5)',
-            fontWeight: 500,
-          }}
-        >
-          Download may take a few moments depending on video size
-        </Typography>
-      </Box>
     </Box>
   );
 };
