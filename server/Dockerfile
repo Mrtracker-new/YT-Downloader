@@ -7,8 +7,8 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-# Install yt-dlp using pip
-RUN pip3 install --break-system-packages yt-dlp
+# Install yt-dlp using pip (from master for latest fixes)
+RUN pip3 install --break-system-packages https://github.com/yt-dlp/yt-dlp/archive/master.zip
 
 # Set working directory
 WORKDIR /app
