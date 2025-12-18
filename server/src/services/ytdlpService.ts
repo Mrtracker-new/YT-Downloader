@@ -108,9 +108,9 @@ class YtDlpService {
       console.log('[ytdlpService] Using default client logic (cookie-free)');
     }
 
-    // Bot Mitigation: Impersonate Android app to bypass "Sign in to confirm" errors
-    // Android is often more robust than iOS and handles its own User-Agent
-    args.push('--extractor-args', 'youtube:player_client=android');
+    // With authenticated cookies, let yt-dlp use its default client selection
+    // This is more reliable than forcing mobile clients which can break extraction
+    console.log('[ytdlpService] Using yt-dlp default client selection');
 
     return args;
   }
