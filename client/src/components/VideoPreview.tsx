@@ -1,4 +1,5 @@
-import { Box, Typography, Card, CardMedia, CardContent, Chip } from '@mui/material';
+import { Box, Typography } from '@mui/material';
+import { Person } from '@mui/icons-material';
 import { VideoInfo } from '../services/api';
 
 interface VideoPreviewProps {
@@ -19,55 +20,74 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ videoInfo }) => {
   };
 
   return (
-    <Card 
-      elevation={2}
-      sx={{
-        background: 'linear-gradient(135deg, #1F1F1F 0%, #151515 100%)',
-        border: '1px solid rgba(220, 38, 38, 0.3)',
-        borderRadius: 2,
-        overflow: 'hidden',
-        transition: 'all 0.3s ease',
-        '&:hover': {
-          borderColor: 'rgba(220, 38, 38, 0.5)',
-          boxShadow: '0 8px 24px rgba(220, 38, 38, 0.2)',
-        },
-      }}
-    >
-      <Box display="flex" flexDirection={{ xs: 'column', sm: 'row' }}>
-        <CardMedia
-          component="img"
+    <Box>
+      <Box display="flex" flexDirection={{ xs: 'column', sm: 'row' }} gap={3}>
+        {/* Thumbnail */}
+        <Box
           sx={{
-            width: { xs: '100%', sm: 200 },
-            height: { xs: 200, sm: 150 },
-            objectFit: 'cover',
-            borderRight: { sm: '1px solid rgba(220, 38, 38, 0.2)' },
+            width: { xs: '100%', sm: 280 },
+            flexShrink: 0,
+            borderRadius: '12px',
+            overflow: 'hidden',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+            position: 'relative',
           }}
-          image={videoInfo.thumbnail}
-          alt={videoInfo.title}
-        />
-        <CardContent sx={{ flex: 1 }}>
-          <Typography variant="h6" gutterBottom noWrap sx={{ fontWeight: 600 }}>
+        >
+          <Box
+            component="img"
+            src={videoInfo.thumbnail}
+            alt={videoInfo.title}
+            sx={{
+              width: '100%',
+              height: '100%',
+              maxHeight: { xs: 200, sm: 180 },
+              objectFit: 'cover',
+              display: 'block',
+            }}
+          />
+          <Box
+            sx={{
+              position: 'absolute',
+              bottom: 8,
+              right: 8,
+              background: 'rgba(0,0,0,0.8)',
+              color: 'white',
+              px: 1,
+              py: 0.5,
+              borderRadius: '4px',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+            }}
+          >
+            {formatDuration(videoInfo.lengthSeconds)}
+          </Box>
+        </Box>
+
+        {/* Info */}
+        <Box flex={1} display="flex" flexDirection="column" justifyContent="center">
+          <Typography variant="h5" component="h2" gutterBottom sx={{
+            fontWeight: 700,
+            color: 'text.primary',
+            lineHeight: 1.3,
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+          }}>
             {videoInfo.title}
           </Typography>
-          <Typography variant="body2" color="text.secondary" gutterBottom sx={{ fontWeight: 500 }}>
-            {videoInfo.author}
-          </Typography>
-          <Box mt={1}>
-            <Chip
-              label={`Duration: ${formatDuration(videoInfo.lengthSeconds)}`}
-              size="small"
-              sx={{
-                background: 'rgba(220, 38, 38, 0.15)',
-                color: '#EF4444',
-                border: '1px solid rgba(220, 38, 38, 0.3)',
-                fontWeight: 600,
-              }}
-              variant="outlined"
-            />
+
+          <Box display="flex" alignItems="center" gap={2} mt={1} flexWrap="wrap">
+            <Box display="flex" alignItems="center" gap={0.5}>
+              <Person sx={{ fontSize: 18, color: 'text.secondary' }} />
+              <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                {videoInfo.author}
+              </Typography>
+            </Box>
           </Box>
-        </CardContent>
+        </Box>
       </Box>
-    </Card>
+    </Box>
   );
 };
 

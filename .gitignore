@@ -14,6 +14,7 @@ dist
 # Testing
 /coverage
 /.nyc_output
+restart-all.ps1
 
 # Environment variables
 .env
