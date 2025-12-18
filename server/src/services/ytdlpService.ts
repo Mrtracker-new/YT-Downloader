@@ -28,10 +28,10 @@ export interface YtDlpFormat {
 
 class YtDlpService {
   // Use 'yt-dlp' on Linux/production, fallback to Windows path for local dev
-  private ytdlpPath = process.platform === 'win32' 
+  private ytdlpPath = process.platform === 'win32'
     ? 'C:\\Users\\rolan\\AppData\\Local\\Microsoft\\WinGet\\Links\\yt-dlp.exe'
     : 'yt-dlp';
-  
+
   private cookiesFile: string | null = null;
   private cache: Map<string, { data: YtDlpVideoInfo; timestamp: number }> = new Map();
   private cacheTTL = 15 * 60 * 1000; // 15 minutes cache for better performance
@@ -49,18 +49,18 @@ class YtDlpService {
    */
   private initializeCookies(): void {
     const cookiesBase64 = process.env.YOUTUBE_COOKIES_BASE64;
-    
+
     if (cookiesBase64) {
       try {
         console.log('[ytdlpService] Found YOUTUBE_COOKIES_BASE64 environment variable');
-        
+
         // Decode base64 cookies
         const cookiesContent = Buffer.from(cookiesBase64, 'base64').toString('utf-8');
-        
+
         // Create temporary cookies file
         this.cookiesFile = join(tmpdir(), `yt-cookies-${Date.now()}.txt`);
         writeFileSync(this.cookiesFile, cookiesContent, 'utf-8');
-        
+
         console.log(`[ytdlpService] Cookies file created at: ${this.cookiesFile}`);
         logger.info('YouTube cookies initialized successfully');
       } catch (error) {
@@ -79,7 +79,7 @@ class YtDlpService {
    */
   private getCommonArgs(): string[] {
     const args: string[] = [];
-    
+
     // Add cookies if available
     if (this.cookiesFile && existsSync(this.cookiesFile)) {
       args.push('--cookies', this.cookiesFile);
@@ -90,7 +90,7 @@ class YtDlpService {
       // This ensures we get all available formats including HD/4K
       console.log('[ytdlpService] Using default web client for full format access');
     }
-    
+
     return args;
   }
 
@@ -122,7 +122,7 @@ class YtDlpService {
       logger.info(`[ytdlpService] Getting video info for: ${url}`);
       logger.info(`[ytdlpService] Using yt-dlp path: ${this.ytdlpPath}`);
       logger.info(`[ytdlpService] Platform: ${process.platform}`);
-      
+
       const args = [
         '--dump-json',
         '--no-warnings',
@@ -160,7 +160,7 @@ class YtDlpService {
       ytdlpProcess.on('close', (code) => {
         console.log(`[ytdlpService] yt-dlp process closed with code: ${code}`);
         logger.info(`[ytdlpService] yt-dlp process closed with code: ${code}`);
-        
+
         if (code === 0) {
           try {
             if (!output || output.trim() === '') {
@@ -169,9 +169,9 @@ class YtDlpService {
               reject(new Error('No output from yt-dlp'));
               return;
             }
-            
+
             const info = JSON.parse(output);
-            
+
             const videoInfo: YtDlpVideoInfo = {
               id: info.id,
               title: info.title,
@@ -184,18 +184,18 @@ class YtDlpService {
 
             console.log(`[ytdlpService] Successfully parsed video info: ${info.title}`);
             logger.info(`[ytdlpService] Successfully parsed video info: ${info.title}`);
-            
+
             // Cache the result
             this.cache.set(url, { data: videoInfo, timestamp: Date.now() });
             console.log(`[ytdlpService] ✅ Cached result for future requests`);
-            
+
             // Clean up cache if it gets too large (keep last 50 entries)
             if (this.cache.size > 50) {
               const oldestKey = Array.from(this.cache.entries())
                 .sort((a, b) => a[1].timestamp - b[1].timestamp)[0][0];
               this.cache.delete(oldestKey);
             }
-            
+
             resolve(videoInfo);
           } catch (error) {
             console.error('[ytdlpService] Failed to parse video info:', error);
@@ -220,10 +220,10 @@ class YtDlpService {
         reject(new Error(`Failed to spawn yt-dlp: ${error.message}`));
       });
     })
-    .finally(() => {
-      // Always clean up pending request when done
-      this.pendingRequests.delete(url);
-    });
+      .finally(() => {
+        // Always clean up pending request when done
+        this.pendingRequests.delete(url);
+      });
 
     // Store the pending request
     this.pendingRequests.set(url, requestPromise);
@@ -233,12 +233,15 @@ class YtDlpService {
   /**
    * Download video using yt-dlp with progress tracking
    */
+  /**
+   * Download video using yt-dlp with progress tracking
+   */
   async downloadVideo(
-    url: string, 
-    quality: string, 
-    audioOnly: boolean, 
+    url: string,
+    quality: string,
+    audioOnly: boolean,
     outputPath: string,
-    onProgress?: (progress: number, eta: string, speed: string) => void
+    onProgress?: (progress: number, eta: string, speed: string, status?: string) => void
   ): Promise<string> {
     return new Promise((resolve, reject) => {
       // Ensure directory exists
@@ -247,180 +250,127 @@ class YtDlpService {
         mkdirSync(dir, { recursive: true });
       }
 
+      // Check for ffmpeg presence (basic check)
+      // In production, we assume it's in PATH or set via --ffmpeg-location if needed
+
       const args = [
         '--no-warnings',
         '--no-playlist',
         '--newline',  // Important: Output progress on new lines for parsing
         '--progress',  // Show progress
         '--console-title',  // Output progress to console
-        '--buffer-size', '32K',  // Optimized buffer size for speed
-        '--http-chunk-size', '10M',  // Download in larger chunks (faster)
-        '--retries', '3',  // Retry failed downloads
-        '--fragment-retries', '3',  // Retry failed fragments
-        '--concurrent-fragments', '5',  // Download 5 fragments in parallel
-        '--throttled-rate', '100K',  // Minimum download rate threshold
-        '--no-part',  // Don't use .part files (slightly faster)
+        '--buffer-size', '16K',  // Standard buffer size
+        '--http-chunk-size', '10M',  // Download in larger chunks
+        '--retries', '5',  // Increased retries
+        '--fragment-retries', '5',
+        '--concurrent-fragments', '3', // Moderate concurrency to avoid IP blocks
+        '--no-part',  // Don't use .part files (avoids lock issues)
         '--no-mtime',  // Don't copy mtime
         ...this.getCommonArgs()
       ];
 
+      // Format Selection Strategy
       if (audioOnly) {
-        // Extract audio and convert to MP3
-        args.push('-x');  // Extract audio only
-        args.push('--audio-format', 'mp3');  // Convert to MP3
-        args.push('--audio-quality', '0');  // Best audio quality
-        console.log('[ytdlpService] Downloading audio as MP3');
-        logger.info('Downloading audio as MP3 (best quality)');
+        // Audio Mode: Extract and convert to MP3
+        args.push('-x');
+        args.push('--audio-format', 'mp3');
+        args.push('--audio-quality', '0'); // Best quality (VBR)
+        logger.info('Mode: Audio Extraction (MP3)');
       } else {
-        // Download video at specified quality
+        // Video Mode: Smart Selection
+        // Priority: Native MP4/M4A > Compatible Merge > Transcode
         let formatString: string;
-        
-        // Handle different quality options
+
         if (quality.toLowerCase() === 'max' || quality.toLowerCase() === 'best') {
-          // Download ABSOLUTE BEST available quality without any restrictions
-          // bestvideo = highest resolution and bitrate video stream
-          // bestaudio = highest bitrate audio stream  
-          // /best = fallback to best single-file format if merge not possible
-          formatString = 'bestvideo+bestaudio/best';
-          console.log('[ytdlpService] Downloading at MAXIMUM available quality');
-          console.log('[ytdlpService] Format: bestvideo (highest res) + bestaudio (best quality)');
-          logger.info('Downloading at MAXIMUM available quality (bestvideo+bestaudio)');
+          // Best quality, prefer mp4 container if available to avoid remixing
+          formatString = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best';
         } else {
-          // Extract height from quality string (e.g., "720p" -> "720")
           const height = quality.replace(/[^0-9]/g, '');
-          
-          // Validate quality option
-          const validQualities = ['144', '240', '360', '480', '720', '1080', '1440', '2160', '4320'];
-          if (!validQualities.includes(height)) {
-            console.warn(`[ytdlpService] Unusual quality requested: ${quality}, using as-is`);
-            logger.warn(`Unusual quality requested: ${quality}`);
-          }
-          
-          // IMPROVED format selection to guarantee video+audio in MP4
-          // Priority order:
-          // 1. Best video up to specified height + best audio, merge to MP4
-          // 2. Best combined format up to specified height in MP4
-          // 3. Best available format
-          formatString = `bestvideo[height<=${height}]+bestaudio/best[height<=${height}]`;
-          
-          console.log(`[ytdlpService] Downloading at ${quality} (${height}p) quality`);
-          logger.info(`Downloading at ${quality} (${height}p) quality`);
+          // 1. Exact height MP4/M4A components (No Transcode)
+          // 2. Exact height Any Components (Remux needed)
+          // 3. Fallback to best
+          formatString = `bestvideo[height<=${height}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=${height}]+bestaudio/best[height<=${height}]/best`;
         }
-        
+
         args.push('-f', formatString);
-        
-        // Force merge to MP4
-        args.push('--merge-output-format', 'mp4');
-        
-        console.log(`[ytdlpService] Format string: ${formatString}`);
-        logger.info(`Format string: ${formatString}`);
-        logger.info('Video will be properly merged to MP4 with AAC audio codec');
+        args.push('--merge-output-format', 'mp4'); // Ensure final container is MP4
+        logger.info(`Mode: Video Download (${quality}) - Format: ${formatString}`);
       }
 
-      // Add output path and URL at the end
       args.push('-o', outputPath);
       args.push(url);
 
-      // Log the full command for debugging
-      console.log(`[ytdlpService] Full command: ${this.ytdlpPath} ${args.join(' ')}`);
-      logger.info(`Starting yt-dlp download to: ${outputPath}`);
-      logger.info(`Full command: ${this.ytdlpPath} ${args.join(' ')}`);
+      logger.info(`Starting process: ${this.ytdlpPath} ${args.join(' ')}`);
 
       const ytdlpProcess = spawn(this.ytdlpPath, args);
       let stderr = '';
+      let currentStatus = 'Downloading';
 
-      ytdlpProcess.stdout.on('data', (data) => {
-        const output = data.toString();
-        const lines = output.split('\n');
-        
-        // Process each line separately for better parsing
+      const parseOutput = (data: string) => {
+        const lines = data.toString().split('\n');
         for (const line of lines) {
-          if (line.trim()) {
-            logger.info('yt-dlp:', line.trim());
+          if (!line.trim()) continue;
+
+          // 1. Detect Status Changes
+          if (line.includes('[Merger]')) {
+            currentStatus = 'Merging';
+            if (onProgress) onProgress(99, '00:00', 'Processing', currentStatus);
+            logger.info('Status: Merging files');
+          } else if (line.includes('[ExtractAudio]')) {
+            currentStatus = 'Converting';
+            if (onProgress) onProgress(99, '00:00', 'Processing', currentStatus);
+            logger.info('Status: Extracting Audio');
+          } else if (line.includes('[FixupM3u8]')) {
+            currentStatus = 'Finalizing';
+            logger.info('Status: Fixing Container');
           }
-          
-          // Parse progress information
+
+          // 2. Parse Progress
           if (onProgress && line.includes('[download]')) {
-            // Match various progress patterns from yt-dlp:
-            // [download]  45.2% of 10.5MiB at 2.3MiB/s ETA 00:03
-            // [download] 100% of 10.5MiB in 00:05
             const progressMatch = line.match(/\[download\]\s+(\d+\.?\d*)%/);
-            
             if (progressMatch) {
               const progress = parseFloat(progressMatch[1]);
-              
-              // Try to extract ETA (format: ETA 00:03 or in 00:05)
+
               let eta = 'Unknown';
               const etaMatch = line.match(/ETA\s+(\d+:\d+)/);
-              const inMatch = line.match(/in\s+(\d+:\d+)/);
-              if (etaMatch) {
-                eta = etaMatch[1];
-              } else if (inMatch) {
-                eta = '00:00'; // Already complete
-              }
-              
-              // Try to extract speed (format: at 2.3MiB/s)
-              let speed = 'Unknown';
+              if (etaMatch) eta = etaMatch[1];
+
+              let speed = '0';
               const speedMatch = line.match(/at\s+([\d\.]+[KMG]iB\/s)/);
-              if (speedMatch) {
-                speed = speedMatch[1];
+              if (speedMatch) speed = speedMatch[1];
+
+              // If we are strictly in "download" phase, pass through.
+              // If we are getting download updates but status was "Merging", it might be a second pass, reset status
+              if (currentStatus !== 'Downloading' && progress < 100) {
+                currentStatus = 'Downloading';
               }
-              
-              // Log the parsed progress for debugging
-              console.log(`[ytdlpService] Parsed progress: ${progress}% | Speed: ${speed} | ETA: ${eta}`);
-              onProgress(progress, eta, speed);
+
+              onProgress(progress, eta, speed, currentStatus);
             }
           }
         }
-      });
+      };
 
+      ytdlpProcess.stdout.on('data', parseOutput);
       ytdlpProcess.stderr.on('data', (data) => {
         stderr += data.toString();
-        const output = data.toString();
-        const lines = output.split('\n');
-        
-        // Process each line separately for better parsing
-        for (const line of lines) {
-          if (line.trim()) {
-            logger.info('yt-dlp stderr:', line.trim());
-          }
-          
-          // Parse progress from stderr as well (yt-dlp sometimes outputs there)
-          if (onProgress && line.includes('[download]')) {
-            const progressMatch = line.match(/\[download\]\s+(\d+\.?\d*)%/);
-            
-            if (progressMatch) {
-              const progress = parseFloat(progressMatch[1]);
-              
-              // Try to extract ETA
-              let eta = 'Unknown';
-              const etaMatch = line.match(/ETA\s+(\d+:\d+)/);
-              const inMatch = line.match(/in\s+(\d+:\d+)/);
-              if (etaMatch) {
-                eta = etaMatch[1];
-              } else if (inMatch) {
-                eta = '00:00';
-              }
-              
-              // Try to extract speed
-              let speed = 'Unknown';
-              const speedMatch = line.match(/at\s+([\d\.]+[KMG]iB\/s)/);
-              if (speedMatch) {
-                speed = speedMatch[1];
-              }
-              
-              console.log(`[ytdlpService] Parsed progress (stderr): ${progress}% | Speed: ${speed} | ETA: ${eta}`);
-              onProgress(progress, eta, speed);
-            }
-          }
-        }
+        // Sometimes progress is in stderr
+        parseOutput(data.toString());
       });
 
       ytdlpProcess.on('close', (code) => {
         if (code === 0) {
-          logger.info('yt-dlp download completed successfully');
-          if (onProgress) onProgress(100, '00:00', 'Complete');
-          resolve(outputPath);
+          // Verify file existence
+          if (existsSync(outputPath)) {
+            const stats = require('fs').statSync(outputPath);
+            if (stats.size > 0) {
+              logger.info(`Download success: ${outputPath} (${stats.size} bytes)`);
+              if (onProgress) onProgress(100, '00:00', 'Complete', 'Completed');
+              resolve(outputPath);
+              return;
+            }
+          }
+          reject(new Error('Download finished but file is missing or empty'));
         } else {
           logger.error('yt-dlp failed:', stderr);
           reject(new Error(`Download failed with code ${code}`));
@@ -449,7 +399,7 @@ class YtDlpService {
     } else {
       // Use the same improved format selection as regular download
       let formatString: string;
-      
+
       if (quality.toLowerCase() === 'max' || quality.toLowerCase() === 'best') {
         // Best available quality without restrictions
         formatString = 'bestvideo+bestaudio/best';
@@ -458,7 +408,7 @@ class YtDlpService {
         const height = quality.replace(/[^0-9]/g, '');
         formatString = `bestvideo[height<=${height}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=${height}]+bestaudio/best[height<=${height}][ext=mp4]/best[height<=${height}]/best`;
       }
-      
+
       args.push('-f', formatString);
       args.push('--merge-output-format', 'mp4');
     }
@@ -466,9 +416,9 @@ class YtDlpService {
     args.push(url);
 
     logger.info(`Streaming download: ${audioOnly ? 'audio' : quality}`);
-    
+
     const process = spawn(this.ytdlpPath, args);
-    
+
     process.stderr.on('data', (data) => {
       logger.info('yt-dlp:', data.toString().trim());
     });
@@ -536,18 +486,18 @@ class YtDlpService {
               description: (info.description || '').substring(0, 500), // Truncate description
               formats: [], // Empty for quick fetch
             };
-            
+
             // Cache the quick info result
             this.quickInfoCache.set(url, { data: quickInfo, timestamp: Date.now() });
             console.log(`[ytdlpService] ✅ Cached quick info for future requests`);
-            
+
             // Clean up quick info cache if it gets too large (keep last 100 entries)
             if (this.quickInfoCache.size > 100) {
               const oldestKey = Array.from(this.quickInfoCache.entries())
                 .sort((a, b) => a[1].timestamp - b[1].timestamp)[0][0];
               this.quickInfoCache.delete(oldestKey);
             }
-            
+
             resolve(quickInfo);
           } catch (error) {
             reject(new Error('Failed to parse quick video info'));

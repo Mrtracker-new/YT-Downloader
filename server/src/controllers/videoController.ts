@@ -7,7 +7,33 @@ import { createReadStream, unlink, readdirSync, existsSync, mkdirSync } from 'fs
 import { join, resolve } from 'path';
 
 // Store for tracking download progress
-const downloadProgress = new Map<string, { progress: number; eta: string; speed: string; done: boolean; maxProgress: number }>();
+// Store for tracking download progress
+const downloadProgress = new Map<string, { progress: number; eta: string; speed: string; done: boolean; maxProgress: number; status: string }>();
+
+// Run cleanup on startup
+const cleanupTempFiles = () => {
+  const tempDir = process.env.TEMP_PATH || resolve(process.cwd(), 'temp');
+  if (existsSync(tempDir)) {
+    const files = readdirSync(tempDir);
+    const now = Date.now();
+    let count = 0;
+    files.forEach(file => {
+      const filePath = join(tempDir, file);
+      try {
+        const stats = require('fs').statSync(filePath);
+        // Delete files older than 1 hour
+        if (now - stats.mtimeMs > 3600000) {
+          require('fs').unlinkSync(filePath);
+          count++;
+        }
+      } catch (e) { /* ignore */ }
+    });
+    if (count > 0) logger.info(`[Cleanup] Removed ${count} old temp files`);
+  }
+};
+// Run once
+// Run once
+cleanupTempFiles();
 
 /**
  * Get quick video information (faster, basic info only)
@@ -119,75 +145,92 @@ export const downloadVideo = async (req: Request, res: Response, next: NextFunct
     const extension = audioOnly ? 'mp3' : 'mp4';
     const safeTitle = sanitize(videoInfo.title).replace(/[^a-zA-Z0-9_\-\.]/g, '_').substring(0, 100);
     const filename = `${safeTitle}.${extension}`;
-    
+
     // Return download ID immediately so frontend can track progress
     const downloadId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
-    
+
     // Start download in background
     // Use absolute path in current working directory for consistency with yt-dlp
     const tempDir = process.env.TEMP_PATH || resolve(process.cwd(), 'temp');
-    
+
     logger.info(`[downloadVideo] Working directory: ${process.cwd()}`);
     logger.info(`[downloadVideo] Temp directory (absolute): ${tempDir}`);
-    
+
     // Ensure temp directory exists
     if (!existsSync(tempDir)) {
       logger.info(`[downloadVideo] Creating temp directory: ${tempDir}`);
       mkdirSync(tempDir, { recursive: true });
-    } else {
-      logger.info(`[downloadVideo] Temp directory already exists`);
     }
-    
+
     const tempFile = join(tempDir, `${downloadId}-${filename}`);
-    
+
     logger.info(`Starting download: ${filename} (ID: ${downloadId})`);
-    logger.info(`Temp file path (absolute): ${tempFile}`);
-    
+
     // Initialize progress tracking
-    downloadProgress.set(downloadId, { progress: 0, eta: 'Starting...', speed: '0', done: false, maxProgress: 0 });
-    
+    downloadProgress.set(downloadId, {
+      progress: 0,
+      eta: 'Starting...',
+      speed: '0',
+      done: false,
+      maxProgress: 0,
+      status: 'Starting'
+    });
+
     // Start download asynchronously
-    ytdlpService.downloadVideo(url, quality, audioOnly, tempFile, (progress, eta, speed) => {
+    ytdlpService.downloadVideo(url, quality, audioOnly, tempFile, (progress, eta, speed, status) => {
       // Get current max progress to prevent backwards jumps (happens with multi-stream downloads)
       const current = downloadProgress.get(downloadId);
       const currentMax = current?.maxProgress || 0;
-      
+
       // Only update if progress is moving forward, or if it's a new download phase
       const finalProgress = Math.max(progress, currentMax);
-      
-      downloadProgress.set(downloadId, { 
-        progress: finalProgress, 
-        eta, 
-        speed, 
+
+      downloadProgress.set(downloadId, {
+        progress: finalProgress,
+        eta,
+        speed,
         done: false,
-        maxProgress: finalProgress 
+        maxProgress: finalProgress,
+        status: status || 'Downloading'
       });
-      logger.info(`[${downloadId}] Progress: ${finalProgress}% (raw: ${progress}%) - ETA: ${eta} - Speed: ${speed}`);
+      // Reduce log spam
+      if (Math.round(finalProgress) % 10 === 0) {
+        logger.info(`[${downloadId}] ${status || 'Downloading'} ${finalProgress}%`);
+      }
     }).then(() => {
       // Mark as complete with done flag
-      downloadProgress.set(downloadId, { progress: 100, eta: '00:00', speed: 'Complete', done: true, maxProgress: 100 });
+      downloadProgress.set(downloadId, {
+        progress: 100,
+        eta: '00:00',
+        speed: 'Complete',
+        done: true,
+        maxProgress: 100,
+        status: 'Completed'
+      });
       logger.info(`Download complete: ${downloadId}`);
-      logger.info(`[downloadVideo] Checking if file exists: ${tempFile}`);
-      logger.info(`[downloadVideo] File exists: ${existsSync(tempFile)}`);
-      if (existsSync(tempFile)) {
-        const stats = require('fs').statSync(tempFile);
-        logger.info(`[downloadVideo] File size: ${stats.size} bytes`);
-      }
-      // Keep file available for 2 minutes after completion for retrieval
+
+      // Keep file available for 5 minutes after completion for retrieval
       setTimeout(() => {
         downloadProgress.delete(downloadId);
         // Clean up temp file
         unlink(tempFile, (err) => {
           if (err) logger.error('Failed to delete temp file:', err);
         });
-      }, 120000); // 2 minutes
+      }, 300000); // 5 minutes
     }).catch((error) => {
       logger.error(`Download failed: ${downloadId}`, error);
-      downloadProgress.set(downloadId, { progress: 0, eta: 'Failed', speed: 'Error', done: false, maxProgress: 0 });
-      setTimeout(() => downloadProgress.delete(downloadId), 5000);
-      unlink(tempFile, () => {});
+      downloadProgress.set(downloadId, {
+        progress: 0,
+        eta: 'Failed',
+        speed: 'Error',
+        done: false,
+        maxProgress: 0,
+        status: 'Error'
+      });
+      setTimeout(() => downloadProgress.delete(downloadId), 10000);
+      unlink(tempFile, () => { });
     });
-    
+
     // Return download ID and file path immediately
     return res.json({
       success: true,
@@ -218,21 +261,21 @@ export const downloadVideo = async (req: Request, res: Response, next: NextFunct
 export const getDownloadedFile = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const { downloadId } = req.params;
-    
+
     if (!downloadId) {
       return res.status(400).json({
         success: false,
         error: 'Download ID is required'
       });
     }
-    
+
     // Find the temp file
     // Use same path as download function
     const tempDir = process.env.TEMP_PATH || resolve(process.cwd(), 'temp');
-    
+
     logger.info(`[getDownloadedFile] Looking for download ID: ${downloadId}`);
     logger.info(`[getDownloadedFile] Temp directory: ${tempDir}`);
-    
+
     // Check if directory exists
     if (!existsSync(tempDir)) {
       logger.error(`[getDownloadedFile] Directory does not exist: ${tempDir}`);
@@ -241,11 +284,11 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
         error: 'Download directory not found'
       });
     }
-    
+
     const files = readdirSync(tempDir);
     logger.info(`[getDownloadedFile] Files in directory: ${JSON.stringify(files)}`);
     const targetFile = files.find((f: string) => f.startsWith(downloadId));
-    
+
     if (!targetFile) {
       logger.error(`[getDownloadedFile] File not found for download ID: ${downloadId}`);
       logger.error(`[getDownloadedFile] Available files: ${files.join(', ')}`);
@@ -254,18 +297,18 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
         error: 'Download not found or expired'
       });
     }
-    
+
     logger.info(`[getDownloadedFile] Found file: ${targetFile}`);
     const tempFile = join(tempDir, targetFile);
-    
+
     // Extract filename by skipping the downloadId prefix (timestamp-randomstring-filename)
     // Split by '-' and skip first 2 parts (timestamp and random string)
     const parts = targetFile.split('-');
     const filename = parts.slice(2).join('-'); // Rejoin in case filename has dashes
-    
+
     // Set response headers
     const contentDisposition = `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
-    
+
     res.writeHead(200, {
       'Content-Type': filename.endsWith('.mp3') ? 'audio/mpeg' : 'video/mp4',
       'Content-Disposition': contentDisposition,
@@ -273,10 +316,10 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
       'Access-Control-Expose-Headers': 'Content-Disposition, X-Suggested-Filename',
       'Cache-Control': 'no-cache'
     });
-    
+
     // Stream the file
     const fileStream = createReadStream(tempFile);
-    
+
     fileStream.on('error', (error) => {
       logger.error('File stream error:', error);
       if (!res.headersSent) {
@@ -286,11 +329,11 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
         });
       }
     });
-    
+
     fileStream.on('end', () => {
       logger.info(`File sent: ${filename}`);
     });
-    
+
     fileStream.pipe(res);
   } catch (error) {
     logger.error('Error in getDownloadedFile:', error);
@@ -326,10 +369,10 @@ export const getDownloadProgress = (req: Request, res: Response): void => {
   // Send progress updates every 300ms for more responsive updates
   const interval = setInterval(() => {
     const progress = downloadProgress.get(downloadId);
-    
+
     if (progress) {
       logger.info(`[getDownloadProgress] Sending progress for ${downloadId}: ${progress.progress}% (done: ${progress.done})`);
-      
+
       try {
         res.write(`data: ${JSON.stringify(progress)}\n\n`);
       } catch (err) {
@@ -337,7 +380,7 @@ export const getDownloadProgress = (req: Request, res: Response): void => {
         clearInterval(interval);
         return;
       }
-      
+
       // Close connection if download is complete
       if (progress.done) {
         logger.info(`[getDownloadProgress] Download complete, closing SSE connection for ${downloadId}`);
