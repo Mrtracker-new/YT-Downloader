@@ -5,6 +5,7 @@ import { YouTube, GitHub } from '@mui/icons-material';
 import VideoInput from './components/VideoInput';
 import VideoPreview from './components/VideoPreview';
 import DownloadControls from './components/DownloadControls';
+import NotificationSettings from './components/NotificationSettings';
 import { VideoInfo } from './services/api';
 
 function App() {
@@ -141,15 +142,18 @@ function App() {
               </Typography>
             </Box>
 
-            <IconButton
-              color="inherit"
-              component="a"
-              href="https://github.com/Mrtracker-new/YT-Downloader"
-              target="_blank"
-              sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
-            >
-              <GitHub />
-            </IconButton>
+            <Box display="flex" gap={1}>
+              <NotificationSettings />
+              <IconButton
+                color="inherit"
+                component="a"
+                href="https://github.com/Mrtracker-new/YT-Downloader"
+                target="_blank"
+                sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
+              >
+                <GitHub />
+              </IconButton>
+            </Box>
           </Toolbar>
         </Container>
       </AppBar>
