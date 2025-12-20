@@ -441,7 +441,11 @@ class YtDlpService {
     const process = spawn(this.ytdlpPath, args);
 
     process.stderr.on('data', (data) => {
-      logger.info('yt-dlp:', data.toString().trim());
+      const output = data.toString().trim();
+      // Only log errors and warnings, not progress/encoding info
+      if (output.includes('ERROR') || output.includes('WARNING') || output.includes('error')) {
+        logger.info('yt-dlp:', output);
+      }
     });
 
     process.on('error', (error) => {
