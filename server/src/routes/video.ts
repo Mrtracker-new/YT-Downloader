@@ -6,7 +6,8 @@ import {
   getQualityOptions,
   validateUrl,
   getDownloadProgress,
-  getDownloadedFile
+  getDownloadedFile,
+  streamVideo
 } from '../controllers/videoController';
 
 const router = Router();
@@ -61,6 +62,14 @@ router.get('/progress/:downloadId', getDownloadProgress);
 router.get('/file/:downloadId', getDownloadedFile);
 
 /**
+ * @route   GET /api/video/stream
+ * @desc    Stream video directly (for QR code sharing)
+ * @access  Public
+ */
+router.get('/stream', streamVideo);
+
+
+/**
  * @route   GET /api/video/test
  * @desc    Test yt-dlp functionality
  * @access  Public
@@ -69,32 +78,32 @@ router.get('/test', async (req, res) => {
   try {
     const { spawn } = await import('child_process');
     const ytdlpPath = 'C:\\Users\\rolan\\AppData\\Local\\Microsoft\\WinGet\\Links\\yt-dlp.exe';
-    
+
     const process = spawn(ytdlpPath, ['--version']);
     let version = '';
-    
+
     process.stdout.on('data', (data) => {
       version += data.toString();
     });
-    
+
     process.on('close', (code) => {
       if (code === 0) {
-        res.json({ 
-          success: true, 
+        res.json({
+          success: true,
           message: 'yt-dlp is working',
           version: version.trim()
         });
       } else {
-        res.status(500).json({ 
-          success: false, 
+        res.status(500).json({
+          success: false,
           error: 'yt-dlp failed to execute'
         });
       }
     });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      error: (error as Error).message 
+    res.status(500).json({
+      success: false,
+      error: (error as Error).message
     });
   }
 });
