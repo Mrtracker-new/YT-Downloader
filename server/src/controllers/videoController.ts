@@ -489,3 +489,62 @@ export const validateUrl = async (req: Request, res: Response, next: NextFunctio
     next(error);
   }
 };
+
+/**
+ * Stream video directly (for QR code sharing)
+ */
+export const streamVideo = async (req: Request, res: Response): Promise<Response | void> => {
+  try {
+    const { url, quality = '720p', audioOnly = 'false' } = req.query;
+
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'URL is required'
+      });
+    }
+
+    const isAudioOnly = audioOnly === 'true';
+
+    logger.info(`[streamVideo] Starting stream for ${url} (quality: ${quality}, audioOnly: ${isAudioOnly})`);
+
+    // Get video info for filename
+    const videoInfo = await ytdlpService.getVideoInfo(url);
+    const extension = isAudioOnly ? 'mp3' : 'mp4';
+    const safeTitle = sanitize(videoInfo.title).replace(/[^a-zA-Z0-9_\-\.]/g, '_').substring(0, 100);
+    const filename = `${safeTitle}.${extension}`;
+
+    // Set response headers
+    res.writeHead(200, {
+      'Content-Type': isAudioOnly ? 'audio/mpeg' : 'video/mp4',
+      'Content-Disposition': `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      'X-Suggested-Filename': filename,
+      'Access-Control-Expose-Headers': 'Content-Disposition, X-Suggested-Filename',
+      'Cache-Control': 'no-cache'
+    });
+
+    // Stream the download directly
+    const stream = ytdlpService.streamDownload(url, quality as string, isAudioOnly);
+
+    stream.on('error', (error: Error) => {
+      logger.error('[streamVideo] Stream error:', error);
+      if (!res.headersSent) {
+        res.status(500).json({
+          success: false,
+          error: 'Stream failed'
+        });
+      }
+    });
+
+    stream.pipe(res);
+  } catch (error) {
+    logger.error('[streamVideo] Error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        error: (error as Error).message || 'Stream failed'
+      });
+    }
+  }
+};
+
