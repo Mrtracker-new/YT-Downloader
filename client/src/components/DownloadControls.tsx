@@ -16,6 +16,7 @@ import {
 } from '@mui/icons-material';
 import toast from 'react-hot-toast';
 import { downloadVideo as downloadVideoApi, VideoInfo } from '../services/api';
+import { notifyDownloadComplete, notifyDownloadFailed } from '../utils/notifications';
 
 interface DownloadControlsProps {
   videoInfo: VideoInfo;
@@ -90,9 +91,22 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
       toast.success('Download completed!', { id: toastId });
       setProgress(100);
       setStatusMessage('Done');
+
+      // Show smart notification
+      await notifyDownloadComplete(
+        videoInfo.title,
+        videoInfo.thumbnail,
+        audioOnly
+      );
     } catch (error) {
       toast.error((error as Error).message || 'Download failed', { id: toastId });
       console.error('Download error:', error);
+
+      // Show failure notification
+      await notifyDownloadFailed(
+        videoInfo.title,
+        (error as Error).message
+      );
     } finally {
       setDownloading(false);
       setTimeout(() => {
