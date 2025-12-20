@@ -8,15 +8,19 @@ import {
   ToggleButtonGroup,
   Grid,
   Fade,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import {
   Download as DownloadIcon,
   Audiotrack,
-  Videocam
+  Videocam,
+  QrCode2 as QrCodeIcon,
 } from '@mui/icons-material';
 import toast from 'react-hot-toast';
 import { downloadVideo as downloadVideoApi, VideoInfo } from '../services/api';
 import { notifyDownloadComplete, notifyDownloadFailed } from '../utils/notifications';
+import QRCodeModal from './QRCodeModal';
 
 interface DownloadControlsProps {
   videoInfo: VideoInfo;
@@ -38,6 +42,7 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
   const [downloadSpeed, setDownloadSpeed] = useState('');
   const [eta, setEta] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
+  const [qrModalOpen, setQrModalOpen] = useState(false);
 
   const actualAvailableQualities = videoInfo.availableQualities || [];
 
@@ -194,40 +199,66 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
       )}
 
       {/* Main Action */}
-      <Button
-        fullWidth
-        variant="contained"
-        size="large"
-        disabled={downloading}
-        onClick={handleDownload}
-        sx={{
-          py: 2,
-          fontSize: '1rem',
-          borderRadius: '12px',
-          bgcolor: '#fff', // High contrast white button for dark mode
-          color: '#000',
-          '&:hover': {
-            bgcolor: '#f4f4f5',
-          },
-          '&.Mui-disabled': {
-            bgcolor: '#27272a',
-            color: '#52525b',
-          }
-        }}
-      >
-        {downloading ? (
-          <Box display="flex" alignItems="center" gap={2}>
-            <Typography variant="body2" fontWeight={600}>
-              {statusMessage}
-            </Typography>
-          </Box>
-        ) : (
-          <>
-            <DownloadIcon sx={{ mr: 1 }} />
-            Download {audioOnly ? 'Audio' : quality}
-          </>
-        )}
-      </Button>
+      <Box display="flex" gap={1.5} alignItems="center">
+        <Button
+          fullWidth
+          variant="contained"
+          size="large"
+          disabled={downloading}
+          onClick={handleDownload}
+          sx={{
+            py: 2,
+            fontSize: '1rem',
+            borderRadius: '12px',
+            bgcolor: '#fff',
+            color: '#000',
+            '&:hover': {
+              bgcolor: '#f4f4f5',
+            },
+            '&.Mui-disabled': {
+              bgcolor: '#27272a',
+              color: '#52525b',
+            }
+          }}
+        >
+          {downloading ? (
+            <Box display="flex" alignItems="center" gap={2}>
+              <Typography variant="body2" fontWeight={600}>
+                {statusMessage}
+              </Typography>
+            </Box>
+          ) : (
+            <>
+              <DownloadIcon sx={{ mr: 1 }} />
+              Download {audioOnly ? 'Audio' : quality}
+            </>
+          )}
+        </Button>
+
+        {/* QR Code Share Button */}
+        <Tooltip title="Share via QR Code">
+          <IconButton
+            onClick={() => setQrModalOpen(true)}
+            disabled={downloading}
+            sx={{
+              bgcolor: '#27272a',
+              color: 'text.primary',
+              width: 56,
+              height: 56,
+              borderRadius: '12px',
+              '&:hover': {
+                bgcolor: '#3f3f46',
+              },
+              '&.Mui-disabled': {
+                bgcolor: '#18181b',
+                color: '#52525b',
+              },
+            }}
+          >
+            <QrCodeIcon />
+          </IconButton>
+        </Tooltip>
+      </Box>
 
       {/* Progress Bar */}
       {downloading && (
@@ -256,6 +287,16 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
           </Box>
         </Fade>
       )}
+
+      {/* QR Code Modal */}
+      <QRCodeModal
+        open={qrModalOpen}
+        onClose={() => setQrModalOpen(false)}
+        url={`https://www.youtube.com/watch?v=${videoInfo.videoId}`}
+        videoTitle={videoInfo.title}
+        quality={quality}
+        audioOnly={audioOnly}
+      />
     </Box>
   );
 };
