@@ -34,6 +34,34 @@ Start your engines, because we are packing:
 *   🎵 **MP3 Magic**: Just want the tunes? We strip the audio cleaner than a banana.
 *   ⚡ **Supersonic Speed**: Optimized buffers and parallel chunks. Zoom zoom.
 *   🧹 **Self-Cleaning**: The server cleans up its own mess (temp files) so your hard drive doesn't explode.
+*   📱 **QR Code Sharing**: Generate a magical QR code that your phone can scan to download videos directly. No more "send it to yourself" emails! Perfect for moving videos from your PC to phone in 2 seconds flat.
+*   💚 **Wake Server Button**: Using Render's free tier? (Smart choice, btw!) The server takes naps after 15 minutes. Just hit the "Wake Server" button to poke it awake. Has a 30-second cooldown so you can't spam it (trust me, we tried).
+
+## 🔄 Cross-Device Magic (QR Code Feature)
+
+Ever download a video on your laptop and then need it on your phone? We feel you.
+
+**Here's the deal:**
+1. Download a video on your computer
+2. Click the **QR Code** button that appears
+3. Scan it with your phone
+4. BAM! Video downloads straight to your phone
+
+No cables, no cloud storage, no emailing yourself. Just pure wireless wizardry. ✨
+
+## 🛌 Wake Server Button (Render Users)
+
+If you're using Render's free tier (no judgment, we respect the hustle), the server goes to sleep after 15 minutes of inactivity. It's like a lazy cat.
+
+**How to wake it:**
+- Look for the green **"Wake Server"** button in the navbar
+- Give it a click
+- Wait ~10-30 seconds while the server yawns and stretches
+- See the success message ✅
+- Download videos like normal!
+
+The button has a 30-second cooldown after each wake to prevent accidental spam (and to give the server time to make its morning coffee ☕).
+
 
 ## 🛠️ The Techy Bit (For the code wizards)
 
