@@ -296,7 +296,7 @@ export const downloadVideo = async (
 export const wakeServer = async (): Promise<{ status: string; timestamp: string }> => {
   try {
     const response = await api.get<{ status: string; timestamp: string }>('/health', {
-      timeout: 30000, // 30 seconds timeout for cold start
+      timeout: 90000, // 90 seconds - Render cold starts can take 60+ seconds
     });
 
     // Check if response is successful and has expected data
@@ -311,12 +311,12 @@ export const wakeServer = async (): Promise<{ status: string; timestamp: string 
     if (axios.isAxiosError(error)) {
       // Network error (server is offline or unreachable)
       if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED' || !error.response) {
-        throw new Error('Cannot connect to server. Server may be offline.');
+        throw new Error('Cannot connect to server. It may be waking up - try again in 10-20 seconds!');
       }
 
-      // Timeout error
+      // Timeout error - server is waking up but taking longer than expected
       if (error.code === 'ECONNABORTED') {
-        throw new Error('Server connection timeout. Server may be starting up.');
+        throw new Error('Server is waking up but taking longer than expected. Try clicking again in 10 seconds!');
       }
 
       // HTTP error status codes
