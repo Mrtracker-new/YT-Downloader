@@ -290,4 +290,43 @@ export const downloadVideo = async (
   }
 };
 
+/**
+ * Wake up the server (useful for Render free tier)
+ */
+export const wakeServer = async (): Promise<{ status: string; timestamp: string }> => {
+  try {
+    const response = await api.get<{ status: string; timestamp: string }>('/health', {
+      timeout: 30000, // 30 seconds timeout for cold start
+    });
+
+    // Check if response is successful and has expected data
+    if (response.status === 200 && response.data) {
+      return response.data;
+    }
+
+    throw new Error('Server returned unexpected response');
+  } catch (error) {
+    console.error('Wake server error:', error);
+
+    if (axios.isAxiosError(error)) {
+      // Network error (server is offline or unreachable)
+      if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED' || !error.response) {
+        throw new Error('Cannot connect to server. Server may be offline.');
+      }
+
+      // Timeout error
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('Server connection timeout. Server may be starting up.');
+      }
+
+      // HTTP error status codes
+      if (error.response) {
+        throw new Error(`Server error: ${error.response.status} ${error.response.statusText}`);
+      }
+    }
+
+    throw new Error('Failed to wake server');
+  }
+};
+
 export default api;
