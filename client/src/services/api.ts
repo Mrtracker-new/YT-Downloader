@@ -1,12 +1,14 @@
 import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_KEY = import.meta.env.VITE_API_KEY || '';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 90000, // 90 seconds - increased for large videos
   headers: {
     'Content-Type': 'application/json',
+    'X-API-Key': API_KEY,
   },
   // Enable HTTP keep-alive for connection reuse
   maxRedirects: 5,
