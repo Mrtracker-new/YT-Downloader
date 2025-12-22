@@ -7,8 +7,10 @@ import {
   validateUrl,
   getDownloadProgress,
   getDownloadedFile,
-  streamVideo
+  streamVideo,
+  getQueueStatus
 } from '../controllers/videoController';
+import { strictRateLimiter, lenientRateLimiter, noRateLimit } from '../middleware/rateLimit';
 
 const router = Router();
 
@@ -17,57 +19,63 @@ const router = Router();
  * @desc    Get quick video information (faster, basic info)
  * @access  Public
  */
-router.post('/quick-info', getQuickVideoInfo);
+router.post('/quick-info', strictRateLimiter, getQuickVideoInfo);
 
 /**
  * @route   POST /api/video/info
  * @desc    Get video information
  * @access  Public
  */
-router.post('/info', getVideoInfo);
+router.post('/info', strictRateLimiter, getVideoInfo);
 
 /**
  * @route   POST /api/video/download
  * @desc    Download video
  * @access  Public
  */
-router.post('/download', downloadVideo);
+router.post('/download', strictRateLimiter, downloadVideo);
 
 /**
  * @route   POST /api/video/qualities
  * @desc    Get available quality options
  * @access  Public
  */
-router.post('/qualities', getQualityOptions);
+router.post('/qualities', strictRateLimiter, getQualityOptions);
 
 /**
  * @route   POST /api/video/validate
  * @desc    Validate YouTube URL
  * @access  Public
  */
-router.post('/validate', validateUrl);
+router.post('/validate', lenientRateLimiter, validateUrl);
 
 /**
  * @route   GET /api/video/progress/:downloadId
  * @desc    Get download progress via Server-Sent Events
  * @access  Public
  */
-router.get('/progress/:downloadId', getDownloadProgress);
+router.get('/progress/:downloadId', noRateLimit, getDownloadProgress);
 
 /**
  * @route   GET /api/video/file/:downloadId
  * @desc    Retrieve downloaded file
  * @access  Public
  */
-router.get('/file/:downloadId', getDownloadedFile);
+router.get('/file/:downloadId', noRateLimit, getDownloadedFile);
 
 /**
  * @route   GET /api/video/stream
  * @desc    Stream video directly (for QR code sharing)
  * @access  Public
  */
-router.get('/stream', streamVideo);
+router.get('/stream', noRateLimit, streamVideo);
 
+/**
+ * @route   GET /api/video/queue/:downloadId?
+ * @desc    Get queue status for a specific download or overall queue stats
+ * @access  Public
+ */
+router.get('/queue/:downloadId?', lenientRateLimiter, getQueueStatus);
 
 /**
  * @route   GET /api/video/test
