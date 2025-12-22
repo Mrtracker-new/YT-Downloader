@@ -355,21 +355,18 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
     const dashIndex = targetFile.indexOf('-');
     const filename = dashIndex !== -1 ? targetFile.substring(dashIndex + 1) : targetFile;
 
-    // CRITICAL: Check if download is still in progress
-    // yt-dlp creates .ytdl and -Frag* files while downloading/merging
-    const fragmentFiles = files.filter((f: string) =>
-      f.startsWith(downloadId) && (f.endsWith('.ytdl') || f.includes('-Frag'))
-    );
-
-    if (fragmentFiles.length > 0) {
-      logger.warn(`Download still in progress for ${downloadId}. Fragment files: ${fragmentFiles.join(', ')}`);
+    // PRODUCTION FIX: Check download queue status instead of file fragments
+    // yt-dlp removes fragments before "Fixing Container" phase completes
+    // Only the queue knows when download is truly done
+    if (!downloadQueue.isDownloadComplete(downloadId)) {
+      logger.warn(`Download still in progress (queue status): ${downloadId}`);
       return res.status(202).json({
         success: false,
         error: 'Download is still being processed. Please wait a few seconds and try again.',
-        status: 'processing',
-        fragmentsRemaining: fragmentFiles.length
+        status: 'processing'
       });
     }
+
 
     // Sanitize filename for HTTP headers - remove problematic characters
     // Replace Unicode characters that aren't allowed in HTTP headers

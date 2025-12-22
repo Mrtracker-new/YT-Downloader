@@ -208,6 +208,24 @@ class DownloadQueue {
     }
 
     /**
+     * Check if a download is complete
+     * Returns true if download is completed or not found in active downloads
+     * Returns false if download is still in progress
+     */
+    isDownloadComplete(downloadId: string): boolean {
+        const download = this.activeDownloads.get(downloadId);
+
+        // If not in active downloads, it's either completed or never existed
+        if (!download) {
+            return true;
+        }
+
+        // Check if status is completed
+        return download.status === 'completed';
+    }
+
+
+    /**
      * Clean up downloads that have been in queue too long
      */
     private cleanupTimedOutDownloads(): void {
