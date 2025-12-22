@@ -11,36 +11,38 @@ import {
   getQueueStatus
 } from '../controllers/videoController';
 import { strictRateLimiter, lenientRateLimiter, noRateLimit } from '../middleware/rateLimit';
+import { optionalAuth } from '../middleware/auth';
+import { validateRequest, downloadSchema, urlValidationSchema, streamSchema } from '../utils/validators';
 
 const router = Router();
 
 /**
  * @route   POST /api/video/quick-info
  * @desc    Get quick video information (faster, basic info)
- * @access  Public
+ * @access  Protected (requires auth)
  */
-router.post('/quick-info', strictRateLimiter, getQuickVideoInfo);
+router.post('/quick-info', optionalAuth, strictRateLimiter, validateRequest(urlValidationSchema), getQuickVideoInfo);
 
 /**
  * @route   POST /api/video/info
  * @desc    Get video information
- * @access  Public
+ * @access  Protected (requires auth)
  */
-router.post('/info', strictRateLimiter, getVideoInfo);
+router.post('/info', optionalAuth, strictRateLimiter, validateRequest(urlValidationSchema), getVideoInfo);
 
 /**
  * @route   POST /api/video/download
  * @desc    Download video
- * @access  Public
+ * @access  Protected (requires auth)
  */
-router.post('/download', strictRateLimiter, downloadVideo);
+router.post('/download', optionalAuth, strictRateLimiter, validateRequest(downloadSchema), downloadVideo);
 
 /**
  * @route   POST /api/video/qualities
  * @desc    Get available quality options
- * @access  Public
+ * @access  Protected (requires auth)
  */
-router.post('/qualities', strictRateLimiter, getQualityOptions);
+router.post('/qualities', optionalAuth, strictRateLimiter, validateRequest(urlValidationSchema), getQualityOptions);
 
 /**
  * @route   POST /api/video/validate
@@ -66,9 +68,9 @@ router.get('/file/:downloadId', noRateLimit, getDownloadedFile);
 /**
  * @route   GET /api/video/stream
  * @desc    Stream video directly (for QR code sharing)
- * @access  Public
+ * @access  Protected (requires auth)
  */
-router.get('/stream', noRateLimit, streamVideo);
+router.get('/stream', optionalAuth, strictRateLimiter, validateRequest(streamSchema, 'query'), streamVideo);
 
 /**
  * @route   GET /api/video/queue/:downloadId?
