@@ -2,10 +2,10 @@ import { Request, Response, NextFunction } from 'express';
 import videoService from '../services/videoService';
 import ytdlpService from '../services/ytdlpService';
 import downloadQueue from '../services/DownloadQueue';
-import sanitize from 'sanitize-filename';
 import logger from '../utils/logger';
 import { createReadStream, unlink, readdirSync, existsSync, mkdirSync } from 'fs';
 import { join, resolve } from 'path';
+import { PathValidator, IdGenerator, FilenameValidator } from '../utils/validators';
 
 // Store for tracking download progress
 // Store for tracking download progress
@@ -142,13 +142,12 @@ export const downloadVideo = async (req: Request, res: Response, next: NextFunct
     // Get video info for filename using yt-dlp
     const videoInfo = await ytdlpService.getVideoInfo(url);
 
-    // Create sanitized filename
+    // Create sanitized filename using secure method
     const extension = audioOnly ? 'mp3' : 'mp4';
-    const safeTitle = sanitize(videoInfo.title).replace(/[^a-zA-Z0-9_\-\.]/g, '_').substring(0, 100);
-    const filename = `${safeTitle}.${extension}`;
+    const filename = FilenameValidator.createSafeFilename(videoInfo.title, extension);
 
-    // Return download ID immediately so frontend can track progress
-    const downloadId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    // Generate cryptographically secure download ID
+    const downloadId = IdGenerator.generateDownloadId();
 
     // Use absolute path in current working directory for consistency with yt-dlp
     const tempDir = process.env.TEMP_PATH || resolve(process.cwd(), 'temp');
@@ -291,6 +290,17 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
       });
     }
 
+    // Validate download ID format to prevent path traversal
+    try {
+      PathValidator.validateDownloadId(downloadId);
+    } catch (error) {
+      logger.error('Invalid download ID:', { downloadId, error: (error as Error).message });
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid download ID format'
+      });
+    }
+
     // Find the temp file
     // Use same path as download function
     const tempDir = process.env.TEMP_PATH || resolve(process.cwd(), 'temp');
@@ -320,10 +330,26 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
       });
     }
 
-    logger.info(`[getDownloadedFile] Found file: ${targetFile}`);
     const tempFile = join(tempDir, targetFile);
 
-    // Extract filename by skipping the downloadId prefix (timestamp-randomstring-filename)
+    // CRITICAL: Validate the resolved path to prevent path traversal
+    try {
+      PathValidator.validatePath(tempFile, tempDir);
+    } catch (error) {
+      logger.error('Path traversal attempt detected:', {
+        downloadId,
+        requestedFile: targetFile,
+        tempDir
+      });
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied'
+      });
+    }
+
+    logger.info(`[getDownloadedFile] Found file: ${targetFile}`);
+
+    // Extract filename by skipping the downloadId prefix
     // Split by '-' and skip first 2 parts (timestamp and random string)
     const parts = targetFile.split('-');
     const filename = parts.slice(2).join('-'); // Rejoin in case filename has dashes
@@ -526,15 +552,27 @@ export const streamVideo = async (req: Request, res: Response): Promise<Response
       });
     }
 
+    // Validate URL to prevent command injection
+    const { UrlValidator, FilenameValidator } = await import('../utils/validators');
+    let validatedUrl: string;
+    try {
+      validatedUrl = UrlValidator.validate(url);
+    } catch (error) {
+      logger.error('URL validation failed in streamVideo:', { error: (error as Error).message });
+      return res.status(400).json({
+        success: false,
+        error: (error as Error).message
+      });
+    }
+
     const isAudioOnly = audioOnly === 'true';
 
-    logger.info(`[streamVideo] Starting stream for ${url} (quality: ${quality}, audioOnly: ${isAudioOnly})`);
+    logger.info(`[streamVideo] Starting stream for ${UrlValidator.sanitizeForLogging(validatedUrl)} (quality: ${quality}, audioOnly: ${isAudioOnly})`);
 
     // Get video info for filename
-    const videoInfo = await ytdlpService.getVideoInfo(url);
+    const videoInfo = await ytdlpService.getVideoInfo(validatedUrl);
     const extension = isAudioOnly ? 'mp3' : 'mp4';
-    const safeTitle = sanitize(videoInfo.title).replace(/[^a-zA-Z0-9_\-\.]/g, '_').substring(0, 100);
-    const filename = `${safeTitle}.${extension}`;
+    const filename = FilenameValidator.createSafeFilename(videoInfo.title, extension);
 
     // Set response headers
     res.writeHead(200, {
@@ -546,7 +584,7 @@ export const streamVideo = async (req: Request, res: Response): Promise<Response
     });
 
     // Stream the download directly
-    const stream = ytdlpService.streamDownload(url, quality as string, isAudioOnly);
+    const stream = ytdlpService.streamDownload(validatedUrl, quality as string, isAudioOnly);
 
     stream.on('error', (error: Error) => {
       logger.error('[streamVideo] Stream error:', error);
