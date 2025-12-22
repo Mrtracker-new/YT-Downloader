@@ -27,10 +27,8 @@ export interface YtDlpFormat {
 }
 
 class YtDlpService {
-  // Use 'yt-dlp' on Linux/production, fallback to Windows path for local dev
-  private ytdlpPath = process.platform === 'win32'
-    ? 'C:\\Users\\rolan\\AppData\\Local\\Microsoft\\WinGet\\Links\\yt-dlp.exe'
-    : 'yt-dlp';
+  // Use environment variable or fallback to system PATH
+  private ytdlpPath = process.env.YTDLP_PATH || 'yt-dlp';
 
   private cookiesFile: string | null = null;
   private cache: Map<string, { data: YtDlpVideoInfo; timestamp: number }> = new Map();
@@ -42,6 +40,17 @@ class YtDlpService {
   constructor() {
     // Initialize cookies from environment variable if available
     this.initializeCookies();
+
+    // Register cleanup handlers
+    process.on('exit', () => this.cleanup());
+    process.on('SIGINT', () => {
+      this.cleanup();
+      process.exit(0);
+    });
+    process.on('SIGTERM', () => {
+      this.cleanup();
+      process.exit(0);
+    });
   }
 
   /**
@@ -77,9 +86,9 @@ class YtDlpService {
           logger.warn('WARNING: Decoded cookies do not contain Netscape header or recognized domain.');
         }
 
-        // Create temporary cookies file
+        // Create temporary cookies file with secure permissions
         this.cookiesFile = join(tmpdir(), `yt-cookies-${Date.now()}.txt`);
-        writeFileSync(this.cookiesFile, cookiesContent, 'utf-8');
+        writeFileSync(this.cookiesFile, cookiesContent, { mode: 0o600, encoding: 'utf-8' });
 
         console.log(`[ytdlpService] Cookies file created at: ${this.cookiesFile}`);
         logger.info('YouTube cookies initialized successfully');
@@ -91,6 +100,23 @@ class YtDlpService {
     } else {
       console.log('[ytdlpService] No cookies found - using cookie-free mode');
       logger.info('Running in cookie-free mode');
+    }
+  }
+
+  /**
+   * Cleanup cookies file on process exit
+   */
+  private cleanup(): void {
+    if (this.cookiesFile && existsSync(this.cookiesFile)) {
+      try {
+        const { unlinkSync } = require('fs');
+        unlinkSync(this.cookiesFile);
+        console.log('[ytdlpService] Cleaned up cookies file');
+        logger.info('Cookies file cleaned up successfully');
+      } catch (error) {
+        console.error('[ytdlpService] Failed to cleanup cookies:', error);
+        logger.error('Failed to cleanup cookies file:', error);
+      }
     }
   }
 
@@ -119,6 +145,15 @@ class YtDlpService {
    * Get video information using yt-dlp
    */
   async getVideoInfo(url: string): Promise<YtDlpVideoInfo> {
+    // Validate URL before processing to prevent command injection
+    const { UrlValidator } = await import('../utils/validators');
+    try {
+      url = UrlValidator.validate(url);
+    } catch (error) {
+      logger.error('URL validation failed:', { error: (error as Error).message });
+      throw error;
+    }
+
     // Check cache first
     const cached = this.cache.get(url);
     if (cached && Date.now() - cached.timestamp < this.cacheTTL) {
