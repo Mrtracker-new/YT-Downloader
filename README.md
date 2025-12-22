@@ -36,6 +36,30 @@ Start your engines, because we are packing:
 *   🧹 **Self-Cleaning**: The server cleans up its own mess (temp files) so your hard drive doesn't explode.
 *   📱 **QR Code Sharing**: Generate a magical QR code that your phone can scan to download videos directly. No more "send it to yourself" emails! Perfect for moving videos from your PC to phone in 2 seconds flat.
 *   💚 **Wake Server Button**: Using Render's free tier? (Smart choice, btw!) The server takes naps after 15 minutes. Just hit the "Wake Server" button to poke it awake. Has a 30-second cooldown so you can't spam it (trust me, we tried).
+*   🎯 **Smart Queue System**: Downloads are managed through an intelligent queue that prevents server overload. Default limit is **3 concurrent downloads**, but you can configure this via environment variables. See [Configuration](#-configuration) below!
+
+## 🎯 Smart Download Queue
+
+To keep your server happy and prevent it from melting, we've added a queue system:
+
+- **Default Limit**: 3 concurrent downloads (configurable)
+- **Queue Management**: Requests beyond the limit are automatically queued
+- **Position Tracking**: Know exactly where you are in line
+- **Auto-Progression**: As downloads complete, queued items start automatically
+- **Timeout Protection**: Queued requests timeout after 5 minutes by default
+
+**Configuration Options** (in `.env`):
+```bash
+MAX_CONCURRENT_DOWNLOADS=3  # Max simultaneous downloads
+MAX_QUEUE_SIZE=20           # Max items that can be queued
+QUEUE_TIMEOUT_MS=300000     # Time before queued item expires (5 min)
+```
+
+**API Endpoint**:
+```bash
+GET /api/video/queue/:downloadId  # Check queue status for a download
+GET /api/video/queue              # Get overall queue statistics
+```
 
 ## 🔄 Cross-Device Magic (QR Code Feature)
 
