@@ -349,10 +349,11 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
 
     logger.info(`[getDownloadedFile] Found file: ${targetFile}`);
 
-    // Extract filename by skipping the downloadId prefix
-    // Split by '-' and skip first 2 parts (timestamp and random string)
-    const parts = targetFile.split('-');
-    const filename = parts.slice(2).join('-'); // Rejoin in case filename has dashes
+    // Extract filename by removing the downloadId prefix
+    // Format is: {downloadId}-{filename}
+    // Find the first dash and take everything after it
+    const dashIndex = targetFile.indexOf('-');
+    const filename = dashIndex !== -1 ? targetFile.substring(dashIndex + 1) : targetFile;
 
     // Set response headers
     const contentDisposition = `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
