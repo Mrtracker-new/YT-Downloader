@@ -1,9 +1,8 @@
-import { spawn } from 'child_process';
-import { dirname } from 'path';
-import { mkdirSync, existsSync, writeFileSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
 import logger from '../utils/logger';
+import { spawn } from 'child_process';
+import { writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from 'fs';
+import { join, dirname, basename } from 'path';
+import { tmpdir } from 'os';
 
 export interface YtDlpVideoInfo {
   id: string;
@@ -417,15 +416,29 @@ class YtDlpService {
       ytdlpProcess.on('close', (code) => {
         if (code === 0) {
           // Verify file existence
-          if (existsSync(outputPath)) {
-            const stats = require('fs').statSync(outputPath);
-            if (stats.size > 0) {
-              logger.info(`Download success: ${outputPath} (${stats.size} bytes)`);
-              if (onProgress) onProgress(100, '00:00', 'Complete', 'Completed');
-              resolve(outputPath);
-              return;
+          // With templates, we need to find the actual file created by yt-dlp
+          // It will match the pattern: outputPath-template becomes real filename
+          const dir = dirname(outputPath);
+          const expectedPrefix = basename(outputPath).split('%(')[0]; // Get the downloadId- part
+
+          try {
+            const files = readdirSync(dir);
+            const matchingFile = files.find((f: string) => f.startsWith(expectedPrefix));
+
+            if (matchingFile) {
+              const actualPath = join(dir, matchingFile);
+              const stats = statSync(actualPath);
+              if (stats.size > 0) {
+                logger.info(`Download success: ${actualPath} (${stats.size} bytes)`);
+                if (onProgress) onProgress(100, '00:00', 'Complete', 'Completed');
+                resolve(actualPath);
+                return;
+              }
             }
+          } catch (err) {
+            logger.error('Error checking download file:', err);
           }
+
           reject(new Error('Download finished but file is missing or empty'));
         } else {
           logger.error('yt-dlp failed:', stderr);

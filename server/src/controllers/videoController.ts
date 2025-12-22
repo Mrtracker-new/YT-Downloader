@@ -3,7 +3,7 @@ import videoService from '../services/videoService';
 import ytdlpService from '../services/ytdlpService';
 import downloadQueue from '../services/DownloadQueue';
 import logger from '../utils/logger';
-import { createReadStream, unlink, readdirSync, existsSync, mkdirSync } from 'fs';
+import { createReadStream, readdirSync, existsSync, mkdirSync } from 'fs';
 import { join, resolve } from 'path';
 import { PathValidator, IdGenerator, FilenameValidator } from '../utils/validators';
 
@@ -233,52 +233,47 @@ export const downloadVideo = async (req: Request, res: Response, next: NextFunct
           });
           logger.info(`Download complete: ${downloadId}`);
 
-          // Keep file available for 5 minutes after completion for retrieval
+
+          // File will be cleaned up by periodic cleanup task based on FILE_RETENTION_HOURS  
           setTimeout(() => {
             downloadProgress.delete(downloadId);
-            // Clean up temp file
-            // Cleanup will happen later - we can't delete here since filename is determined by yt-dlp
-            // The file will be cleaned up after FILE_RETENTION_HOURS
-            if (false) { // Disabled cleanup here
-              if (err) logger.error('Failed to delete temp file:', err);
-            });
-        }, 300000); // 5 minutes
-  }
+          }, 300000); // 5 minutes
+        }
       }
     );
 
-// Check if successfully queued
-if (!queueResult.queued) {
-  downloadProgress.delete(downloadId);
-  return res.status(503).json({
-    success: false,
-    error: queueResult.error || 'Unable to queue download'
-  });
-}
+    // Check if successfully queued
+    if (!queueResult.queued) {
+      downloadProgress.delete(downloadId);
+      return res.status(503).json({
+        success: false,
+        error: queueResult.error || 'Unable to queue download'
+      });
+    }
 
-// Return download ID and queue status
-return res.json({
-  success: true,
-  data: {
-    downloadId,
-    filename,
-    queuePosition: queueResult.position
-  },
-  message: queueResult.position === 1 ? 'Download starting' : `Queued at position ${queueResult.position}`
-});
-  } catch (error) {
-  const errorMessage = (error as Error).message || 'Unknown error';
-  logger.error('Error in downloadVideo:', {
-    error: errorMessage,
-    stack: (error as Error).stack
-  });
-  if (!res.headersSent) {
-    res.status(500).json({
-      success: false,
-      error: `Download failed: ${errorMessage}`
+    // Return download ID and queue status
+    return res.json({
+      success: true,
+      data: {
+        downloadId,
+        filename,
+        queuePosition: queueResult.position
+      },
+      message: queueResult.position === 1 ? 'Download starting' : `Queued at position ${queueResult.position}`
     });
+  } catch (error) {
+    const errorMessage = (error as Error).message || 'Unknown error';
+    logger.error('Error in downloadVideo:', {
+      error: errorMessage,
+      stack: (error as Error).stack
+    });
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        error: `Download failed: ${errorMessage}`
+      });
+    }
   }
-}
 };
 
 /**
@@ -360,13 +355,20 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
     const dashIndex = targetFile.indexOf('-');
     const filename = dashIndex !== -1 ? targetFile.substring(dashIndex + 1) : targetFile;
 
-    // Set response headers
-    const contentDisposition = `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+    // Sanitize filename for HTTP headers - remove problematic characters
+    // Replace Unicode characters that aren't allowed in HTTP headers
+    const safeFilename = filename
+      .replace(/[^\x20-\x7E]/g, '_') // Replace non-ASCII with underscore
+      .replace(/["\\]/g, '') // Remove quotes and backslashes
+      .substring(0, 200); // Limit length
+
+    // Set response headers with properly encoded filename
+    const contentDisposition = `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 
     res.writeHead(200, {
       'Content-Type': filename.endsWith('.mp3') ? 'audio/mpeg' : 'video/mp4',
       'Content-Disposition': contentDisposition,
-      'X-Suggested-Filename': filename,
+      'X-Suggested-Filename': encodeURIComponent(filename),
       'Access-Control-Expose-Headers': 'Content-Disposition, X-Suggested-Filename',
       'Cache-Control': 'no-cache'
     });
