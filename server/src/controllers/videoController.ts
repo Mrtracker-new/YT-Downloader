@@ -362,15 +362,22 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
       .replace(/["\\]/g, '') // Remove quotes and backslashes
       .substring(0, 200); // Limit length
 
-    // Set response headers with properly encoded filename
+    // Get file size for Content-Length header (critical for proper downloads)
+    const { statSync } = require('fs');
+    const fileStats = statSync(tempFile);
+    const fileSize = fileStats.size;
+
+    // Set response headers with properly encoded filename and Content-Length
     const contentDisposition = `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 
     res.writeHead(200, {
       'Content-Type': filename.endsWith('.mp3') ? 'audio/mpeg' : 'video/mp4',
+      'Content-Length': fileSize, // CRITICAL: Tells browser exact file size
       'Content-Disposition': contentDisposition,
       'X-Suggested-Filename': encodeURIComponent(filename),
-      'Access-Control-Expose-Headers': 'Content-Disposition, X-Suggested-Filename',
-      'Cache-Control': 'no-cache'
+      'Access-Control-Expose-Headers': 'Content-Disposition, X-Suggested-Filename, Content-Length',
+      'Cache-Control': 'no-cache',
+      'Accept-Ranges': 'bytes' // Enable resume capability
     });
 
     // Stream the file
