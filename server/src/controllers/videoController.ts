@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import videoService from '../services/videoService';
 import ytdlpService from '../services/ytdlpService';
+import downloadQueue from '../services/DownloadQueue';
 import sanitize from 'sanitize-filename';
 import logger from '../utils/logger';
 import { createReadStream, unlink, readdirSync, existsSync, mkdirSync } from 'fs';
@@ -149,7 +150,6 @@ export const downloadVideo = async (req: Request, res: Response, next: NextFunct
     // Return download ID immediately so frontend can track progress
     const downloadId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
-    // Start download in background
     // Use absolute path in current working directory for consistency with yt-dlp
     const tempDir = process.env.TEMP_PATH || resolve(process.cwd(), 'temp');
 
@@ -164,81 +164,103 @@ export const downloadVideo = async (req: Request, res: Response, next: NextFunct
 
     const tempFile = join(tempDir, `${downloadId}-${filename}`);
 
-    logger.info(`Starting download: ${filename} (ID: ${downloadId})`);
+    logger.info(`Adding to queue: ${filename} (ID: ${downloadId})`);
 
     // Initialize progress tracking
     downloadProgress.set(downloadId, {
       progress: 0,
-      eta: 'Starting...',
+      eta: 'Queued...',
       speed: '0',
       done: false,
       maxProgress: 0,
-      status: 'Starting'
+      status: 'Queued'
     });
 
-    // Start download asynchronously
-    ytdlpService.downloadVideo(url, quality, audioOnly, tempFile, (progress, eta, speed, status) => {
-      // Get current max progress to prevent backwards jumps (happens with multi-stream downloads)
-      const current = downloadProgress.get(downloadId);
-      const currentMax = current?.maxProgress || 0;
+    // Add to download queue
+    const queueResult = await downloadQueue.addDownload(
+      downloadId,
+      url,
+      quality,
+      audioOnly,
+      tempFile,
+      // Progress callback
+      (progress, eta, speed, status) => {
+        // Get current max progress to prevent backwards jumps (happens with multi-stream downloads)
+        const current = downloadProgress.get(downloadId);
+        const currentMax = current?.maxProgress || 0;
 
-      // Only update if progress is moving forward, or if it's a new download phase
-      const finalProgress = Math.max(progress, currentMax);
+        // Only update if progress is moving forward, or if it's a new download phase
+        const finalProgress = Math.max(progress, currentMax);
 
-      downloadProgress.set(downloadId, {
-        progress: finalProgress,
-        eta,
-        speed,
-        done: false,
-        maxProgress: finalProgress,
-        status: status || 'Downloading'
-      });
-      // Reduce log spam
-      if (Math.round(finalProgress) % 10 === 0) {
-        logger.info(`[${downloadId}] ${status || 'Downloading'} ${finalProgress}%`);
-      }
-    }).then(() => {
-      // Mark as complete with done flag
-      downloadProgress.set(downloadId, {
-        progress: 100,
-        eta: '00:00',
-        speed: 'Complete',
-        done: true,
-        maxProgress: 100,
-        status: 'Completed'
-      });
-      logger.info(`Download complete: ${downloadId}`);
-
-      // Keep file available for 5 minutes after completion for retrieval
-      setTimeout(() => {
-        downloadProgress.delete(downloadId);
-        // Clean up temp file
-        unlink(tempFile, (err) => {
-          if (err) logger.error('Failed to delete temp file:', err);
+        downloadProgress.set(downloadId, {
+          progress: finalProgress,
+          eta,
+          speed,
+          done: false,
+          maxProgress: finalProgress,
+          status: status || 'Downloading'
         });
-      }, 300000); // 5 minutes
-    }).catch((error) => {
-      logger.error(`Download failed: ${downloadId}`, error);
-      downloadProgress.set(downloadId, {
-        progress: 0,
-        eta: 'Failed',
-        speed: 'Error',
-        done: false,
-        maxProgress: 0,
-        status: 'Error'
-      });
-      setTimeout(() => downloadProgress.delete(downloadId), 10000);
-      unlink(tempFile, () => { });
-    });
+        // Reduce log spam
+        if (Math.round(finalProgress) % 10 === 0) {
+          logger.info(`[${downloadId}] ${status || 'Downloading'} ${finalProgress}%`);
+        }
+      },
+      // Completion callback
+      (error) => {
+        if (error) {
+          logger.error(`Download failed: ${downloadId}`, error);
+          downloadProgress.set(downloadId, {
+            progress: 0,
+            eta: 'Failed',
+            speed: 'Error',
+            done: false,
+            maxProgress: 0,
+            status: 'Error'
+          });
+          setTimeout(() => downloadProgress.delete(downloadId), 10000);
+          unlink(tempFile, () => { });
+        } else {
+          // Mark as complete with done flag
+          downloadProgress.set(downloadId, {
+            progress: 100,
+            eta: '00:00',
+            speed: 'Complete',
+            done: true,
+            maxProgress: 100,
+            status: 'Completed'
+          });
+          logger.info(`Download complete: ${downloadId}`);
 
-    // Return download ID and file path immediately
+          // Keep file available for 5 minutes after completion for retrieval
+          setTimeout(() => {
+            downloadProgress.delete(downloadId);
+            // Clean up temp file
+            unlink(tempFile, (err) => {
+              if (err) logger.error('Failed to delete temp file:', err);
+            });
+          }, 300000); // 5 minutes
+        }
+      }
+    );
+
+    // Check if successfully queued
+    if (!queueResult.queued) {
+      downloadProgress.delete(downloadId);
+      return res.status(503).json({
+        success: false,
+        error: queueResult.error || 'Unable to queue download'
+      });
+    }
+
+    // Return download ID and queue status
     return res.json({
       success: true,
       data: {
         downloadId,
-        filename
+        filename,
+        queuePosition: queueResult.position
       },
-      message: 'Download started'
+      message: queueResult.position === 1 ? 'Download starting' : `Queued at position ${queueResult.position}`
     });
   } catch (error) {
     const errorMessage = (error as Error).message || 'Unknown error';
@@ -545,6 +567,39 @@ export const streamVideo = async (req: Request, res: Response): Promise<Response
         error: (error as Error).message || 'Stream failed'
       });
     }
+  }
+};
+
+/**
+ * Get queue status for a download or overall queue stats
+ */
+export const getQueueStatus = async (req: Request, res: Response): Promise<Response | void> => {
+  try {
+    const { downloadId } = req.params;
+
+    if (downloadId) {
+      // Get status for specific download
+      const status = downloadQueue.getQueueStatus(downloadId);
+
+      return res.json({
+        success: true,
+        data: status
+      });
+    } else {
+      // Get overall queue statistics
+      const stats = downloadQueue.getStats();
+
+      return res.json({
+        success: true,
+        data: stats
+      });
+    }
+  } catch (error) {
+    logger.error('Error in getQueueStatus:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to get queue status'
+    });
   }
 };
 
