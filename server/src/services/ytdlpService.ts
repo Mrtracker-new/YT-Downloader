@@ -415,31 +415,45 @@ class YtDlpService {
 
       ytdlpProcess.on('close', (code) => {
         if (code === 0) {
-          // Verify file existence
-          // With templates, we need to find the actual file created by yt-dlp
-          // It will match the pattern: outputPath-template becomes real filename
-          const dir = dirname(outputPath);
-          const expectedPrefix = basename(outputPath).split('%(')[0]; // Get the downloadId- part
+          // Give filesystem a moment to flush writes (especially important on cloud platforms)
+          setTimeout(() => {
+            // Verify file existence
+            // With templates, we need to find the actual file created by yt-dlp
+            const dir = dirname(outputPath);
+            const expectedPrefix = basename(outputPath).split('%(')[0]; // Get the downloadId- part
 
-          try {
-            const files = readdirSync(dir);
-            const matchingFile = files.find((f: string) => f.startsWith(expectedPrefix));
+            logger.info(`Looking for file with prefix: "${expectedPrefix}" in ${dir}`);
 
-            if (matchingFile) {
-              const actualPath = join(dir, matchingFile);
-              const stats = statSync(actualPath);
-              if (stats.size > 0) {
-                logger.info(`Download success: ${actualPath} (${stats.size} bytes)`);
-                if (onProgress) onProgress(100, '00:00', 'Complete', 'Completed');
-                resolve(actualPath);
-                return;
+            try {
+              const files = readdirSync(dir);
+              logger.info(`Files in directory: ${JSON.stringify(files)}`);
+
+              const matchingFile = files.find((f: string) => f.startsWith(expectedPrefix));
+
+              if (matchingFile) {
+                const actualPath = join(dir, matchingFile);
+                const stats = statSync(actualPath);
+
+                logger.info(`Found file: ${matchingFile}, Size: ${stats.size} bytes`);
+
+                if (stats.size > 0) {
+                  logger.info(`Download success: ${actualPath} (${stats.size} bytes)`);
+                  if (onProgress) onProgress(100, '00:00', 'Complete', 'Completed');
+                  resolve(actualPath);
+                  return;
+                } else {
+                  logger.error(`File exists but is empty: ${actualPath}`);
+                }
+              } else {
+                logger.error(`No file found with prefix: ${expectedPrefix}`);
+                logger.error(`Available files: ${files.join(', ')}`);
               }
+            } catch (err) {
+              logger.error('Error checking download file:', err);
             }
-          } catch (err) {
-            logger.error('Error checking download file:', err);
-          }
 
-          reject(new Error('Download finished but file is missing or empty'));
+            reject(new Error('Download finished but file is missing or empty'));
+          }, 500); // 500ms delay to ensure file writes are flushed
         } else {
           logger.error('yt-dlp failed:', stderr);
           reject(new Error(`Download failed with code ${code}`));
