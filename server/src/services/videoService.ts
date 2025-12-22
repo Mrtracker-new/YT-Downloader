@@ -1,4 +1,4 @@
-import { validateYouTubeUrl } from '../utils/validators';
+import { UrlValidator } from '../utils/validators';
 import logger from '../utils/logger';
 import ytdlpService from './ytdlpService';
 
@@ -31,7 +31,9 @@ class VideoService {
   async getVideoInfo(url: string): Promise<VideoInfo> {
     try {
       // Validate URL
-      if (!validateYouTubeUrl(url)) {
+      try {
+        UrlValidator.validate(url);
+      } catch (error) {
         throw new Error('Invalid YouTube URL');
       }
 
@@ -44,7 +46,7 @@ class VideoService {
       const availableFormats: VideoFormat[] = info.formats.map((format: any) => {
         const hasVideo = !!format.vcodec && format.vcodec !== 'none';
         const hasAudio = !!format.acodec && format.acodec !== 'none';
-        
+
         // Extract quality label - use height if available for video formats
         let qualityLabel: string | undefined;
         if (hasVideo && format.height) {
@@ -54,7 +56,7 @@ class VideoService {
         } else if (hasVideo) {
           qualityLabel = format.quality || undefined;
         }
-        
+
         return {
           itag: parseInt(format.format_id) || 0,
           quality: format.quality || 'unknown',
@@ -78,12 +80,12 @@ class VideoService {
           })
           .filter(h => h !== null)
       )] as number[];
-      
+
       // Sort qualities in descending order and convert to quality labels
       const sortedQualities = videoQualities
         .sort((a, b) => b - a)
         .map(h => `${h}p`);
-      
+
       const videoInfo: VideoInfo = {
         videoId: info.id,
         title: info.title,
@@ -112,7 +114,7 @@ class VideoService {
         // For audio, find highest quality audio format
         const audioFormats = formats.filter(f => f.hasAudio);
         if (audioFormats.length === 0) return null;
-        
+
         // Sort by quality and return best
         return audioFormats.sort((a, b) => {
           const aSize = parseInt(a.contentLength || '0');
@@ -122,9 +124,9 @@ class VideoService {
       }
 
       // For video, try to find format with both video and audio first
-      let videoFormats = formats.filter(f => 
-        f.hasVideo && 
-        f.hasAudio && 
+      let videoFormats = formats.filter(f =>
+        f.hasVideo &&
+        f.hasAudio &&
         f.qualityLabel?.toLowerCase().includes(quality.toLowerCase())
       );
 
@@ -135,11 +137,11 @@ class VideoService {
 
       // If still no format found, get the best video-only format
       if (videoFormats.length === 0) {
-        videoFormats = formats.filter(f => 
-          f.hasVideo && 
+        videoFormats = formats.filter(f =>
+          f.hasVideo &&
           f.qualityLabel?.toLowerCase().includes(quality.toLowerCase())
         );
-        
+
         if (videoFormats.length === 0) {
           // Last resort: get highest quality video
           videoFormats = formats.filter(f => f.hasVideo);
@@ -166,7 +168,9 @@ class VideoService {
    */
   async validateVideo(url: string): Promise<boolean> {
     try {
-      if (!validateYouTubeUrl(url)) {
+      try {
+        UrlValidator.validate(url);
+      } catch (error) {
         return false;
       }
 
