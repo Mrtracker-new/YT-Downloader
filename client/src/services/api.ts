@@ -256,10 +256,41 @@ export const downloadVideo = async (
     console.log('Download complete, waiting 2 seconds before retrieval...');
     await new Promise(resolve => setTimeout(resolve, 2000));
 
-    // Step 4: Retrieve the downloaded file
-    // Use window.location to trigger browser's native download
-    // This avoids loading the entire file into memory (Blob) which crashes on large files
-    console.log(`Redirecting to file: ${API_BASE_URL}/api/video/file/${downloadId}`);
+    // Step 4: Wait for file to be fully ready (merged)
+    // yt-dlp may still be merging fragments even after progress shows 100%
+    console.log('Waiting for file to be fully processed...');
+
+    const maxRetries = 10;
+    let retries = 0;
+    let fileReady = false;
+
+    while (retries < maxRetries && !fileReady) {
+      try {
+        // Check if file is ready by making a HEAD request  
+        const checkResponse = await api.head(`/api/video/file/${downloadId}`);
+
+        // If we get a 200, file is ready
+        if (checkResponse.status === 200) {
+          fileReady = true;
+          console.log('File is ready for download!');
+          break;
+        }
+      } catch (error: any) {
+        // 202 means still processing, wait and retry
+        if (error.response?.status === 202) {
+          console.log(`File still processing, retry ${retries + 1}/${maxRetries}...`);
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+          retries++;
+        } else {
+          // Other errors, break and try to download anyway
+          console.warn('Error checking file status:', error.message);
+          break;
+        }
+      }
+    }
+
+    // Step 5: Trigger download
+    console.log(`Triggering download: ${API_BASE_URL}/api/video/file/${downloadId}`);
 
     // Create a temporary link to force download
     // We can't use window.location.href directly efficiently for tracking completion,
