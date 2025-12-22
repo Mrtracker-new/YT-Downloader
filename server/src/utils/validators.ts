@@ -15,17 +15,6 @@ export class UrlValidator {
     'm.youtube.com'
   ];
 
-  private static readonly BLOCKED_IP_PATTERNS = [
-    /^127\./, // Localhost
-    /^10\./, // Private 10.x
-    /^172\.(1[6-9]|2[0-9]|3[01])\./, // Private 172.16-31
-    /^192\.168\./, // Private 192.168
-    /^169\.254\./, // Link-local
-    /^::1$/, // IPv6 localhost
-    /^fc/, // IPv6 private
-    /^fe80/ // IPv6 link-local
-  ];
-
   /**
    * Validate and sanitize YouTube URL
    */
