@@ -161,7 +161,9 @@ export const downloadVideo = async (req: Request, res: Response, next: NextFunct
       mkdirSync(tempDir, { recursive: true });
     }
 
-    const tempFile = join(tempDir, `${downloadId}-${filename}`);
+    // Use yt-dlp's template system for proper filename handling
+    // This ensures yt-dlp creates the file with correct extension and format
+    const outputTemplate = join(tempDir, `${downloadId}-%(title)s.%(ext)s`);
 
     logger.info(`Adding to queue: ${filename} (ID: ${downloadId})`);
 
@@ -181,7 +183,7 @@ export const downloadVideo = async (req: Request, res: Response, next: NextFunct
       url,
       quality,
       audioOnly,
-      tempFile,
+      outputTemplate,
       // Progress callback
       (progress, eta, speed, status) => {
         // Get current max progress to prevent backwards jumps (happens with multi-stream downloads)
@@ -217,7 +219,8 @@ export const downloadVideo = async (req: Request, res: Response, next: NextFunct
             status: 'Error'
           });
           setTimeout(() => downloadProgress.delete(downloadId), 10000);
-          unlink(tempFile, () => { });
+          // Cleanup happens in getDownloadedFile after serving
+          // No need to delete here since we don't know the exact filename
         } else {
           // Mark as complete with done flag
           downloadProgress.set(downloadId, {
@@ -234,46 +237,48 @@ export const downloadVideo = async (req: Request, res: Response, next: NextFunct
           setTimeout(() => {
             downloadProgress.delete(downloadId);
             // Clean up temp file
-            unlink(tempFile, (err) => {
+            // Cleanup will happen later - we can't delete here since filename is determined by yt-dlp
+            // The file will be cleaned up after FILE_RETENTION_HOURS
+            if (false) { // Disabled cleanup here
               if (err) logger.error('Failed to delete temp file:', err);
             });
-          }, 300000); // 5 minutes
-        }
+        }, 300000); // 5 minutes
+  }
       }
     );
 
-    // Check if successfully queued
-    if (!queueResult.queued) {
-      downloadProgress.delete(downloadId);
-      return res.status(503).json({
-        success: false,
-        error: queueResult.error || 'Unable to queue download'
-      });
-    }
+// Check if successfully queued
+if (!queueResult.queued) {
+  downloadProgress.delete(downloadId);
+  return res.status(503).json({
+    success: false,
+    error: queueResult.error || 'Unable to queue download'
+  });
+}
 
-    // Return download ID and queue status
-    return res.json({
-      success: true,
-      data: {
-        downloadId,
-        filename,
-        queuePosition: queueResult.position
-      },
-      message: queueResult.position === 1 ? 'Download starting' : `Queued at position ${queueResult.position}`
-    });
+// Return download ID and queue status
+return res.json({
+  success: true,
+  data: {
+    downloadId,
+    filename,
+    queuePosition: queueResult.position
+  },
+  message: queueResult.position === 1 ? 'Download starting' : `Queued at position ${queueResult.position}`
+});
   } catch (error) {
-    const errorMessage = (error as Error).message || 'Unknown error';
-    logger.error('Error in downloadVideo:', {
-      error: errorMessage,
-      stack: (error as Error).stack
+  const errorMessage = (error as Error).message || 'Unknown error';
+  logger.error('Error in downloadVideo:', {
+    error: errorMessage,
+    stack: (error as Error).stack
+  });
+  if (!res.headersSent) {
+    res.status(500).json({
+      success: false,
+      error: `Download failed: ${errorMessage}`
     });
-    if (!res.headersSent) {
-      res.status(500).json({
-        success: false,
-        error: `Download failed: ${errorMessage}`
-      });
-    }
   }
+}
 };
 
 /**
