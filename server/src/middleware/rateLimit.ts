@@ -37,5 +37,34 @@ export const lenientRateLimiter = rateLimit({
  */
 export const noRateLimit = (req: any, res: any, next: any) => next();
 
+/**
+ * Strict rate limiter for download endpoints
+ */
+export const downloadRateLimit = rateLimit({
+  windowMs: 3600000, // 1 hour
+  max: parseInt(process.env.DOWNLOAD_RATE_LIMIT_MAX || '10'), // 10 downloads per hour
+  skipSuccessfulRequests: false,
+  message: {
+    success: false,
+    error: 'Download limit reached. Please try again in an hour.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
+ * Strict rate limiter for streaming endpoints
+ */
+export const streamRateLimit = rateLimit({
+  windowMs: parseInt(process.env.STREAM_RATE_LIMIT_WINDOW || '300000'), // 5 minutes
+  max: parseInt(process.env.STREAM_RATE_LIMIT_MAX || '5'), // 5 streams per 5 minutes
+  message: {
+    success: false,
+    error: 'Streaming limit reached. Please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Default export for backward compatibility
 export const rateLimiter = lenientRateLimiter;
