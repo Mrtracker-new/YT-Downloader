@@ -25,9 +25,58 @@ export interface YtDlpFormat {
   width?: number;
 }
 
+/**
+ * Resolves the absolute path to the yt-dlp executable using a multi-tier strategy:
+ *   1. YTDLP_PATH environment variable (set by .env or start-app.bat)
+ *   2. Project-local bin/ directory (bin/yt-dlp.exe on Windows, bin/yt-dlp otherwise)
+ *   3. Bare 'yt-dlp' — relies on system PATH as a last resort
+ *
+ * This prevents the spawn ENOENT crash that occurs when dotenv hasn't been
+ * loaded before the singleton is instantiated.
+ */
+function resolveYtdlpPath(): string {
+  // Tier 1: explicit env var
+  const fromEnv = process.env.YTDLP_PATH?.trim();
+  if (fromEnv && existsSync(fromEnv)) {
+    logger.info(`[ytdlpService] Resolved yt-dlp via YTDLP_PATH: ${fromEnv}`);
+    return fromEnv;
+  }
+  if (fromEnv) {
+    logger.warn(`[ytdlpService] YTDLP_PATH is set to "${fromEnv}" but file does not exist — falling back.`);
+  }
+
+  // Tier 2: project-local bin/ (works even without .env if start-app placed the binary)
+  // __dirname = server/src/services  →  ../../..  = project root
+  const binName = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
+  const localBin = join(__dirname, '..', '..', '..', 'bin', binName);
+  if (existsSync(localBin)) {
+    logger.info(`[ytdlpService] Resolved yt-dlp via local bin/: ${localBin}`);
+    return localBin;
+  }
+
+  // Tier 3: system PATH
+  logger.warn(`[ytdlpService] yt-dlp not found in YTDLP_PATH or local bin/ — falling back to system PATH ("yt-dlp"). Install it or place yt-dlp.exe in the bin/ directory.`);
+  return 'yt-dlp';
+}
+
+/**
+ * Resolves the bin/ directory (if it exists) so we can prepend it to PATH,
+ * letting yt-dlp discover ffmpeg/ffprobe without --ffmpeg-location.
+ */
+function buildSpawnEnv(): NodeJS.ProcessEnv {
+  const binDir = join(__dirname, '..', '..', '..', 'bin');
+  if (!existsSync(binDir)) return process.env;
+
+  const sep = process.platform === 'win32' ? ';' : ':';
+  return {
+    ...process.env,
+    PATH: `${binDir}${sep}${process.env.PATH ?? ''}`,
+  };
+}
+
 class YtDlpService {
-  // Use environment variable or fallback to system PATH
-  private ytdlpPath = process.env.YTDLP_PATH || 'yt-dlp';
+  private ytdlpPath = resolveYtdlpPath();
+  private spawnEnv = buildSpawnEnv();
 
   private cookiesFile: string | null = null;
   private cache: Map<string, { data: YtDlpVideoInfo; timestamp: number }> = new Map();
@@ -199,7 +248,7 @@ class YtDlpService {
 
       let output = '';
       let errorOutput = '';
-      const ytdlpProcess = spawn(this.ytdlpPath, args);
+      const ytdlpProcess = spawn(this.ytdlpPath, args, { env: this.spawnEnv });
 
       ytdlpProcess.stdout.on('data', (data) => {
         output += data.toString();
@@ -357,7 +406,7 @@ class YtDlpService {
 
       logger.info(`Starting process: ${this.ytdlpPath} ${args.join(' ')}`);
 
-      const ytdlpProcess = spawn(this.ytdlpPath, args);
+      const ytdlpProcess = spawn(this.ytdlpPath, args, { env: this.spawnEnv });
       let stderr = '';
       let currentStatus = 'Downloading';
 
@@ -500,7 +549,7 @@ class YtDlpService {
 
     logger.info(`Streaming download: ${audioOnly ? 'audio' : quality}`);
 
-    const process = spawn(this.ytdlpPath, args);
+    const process = spawn(this.ytdlpPath, args, { env: this.spawnEnv });
 
     process.stderr.on('data', (data) => {
       const output = data.toString().trim();
@@ -554,7 +603,7 @@ class YtDlpService {
       ];
 
       let output = '';
-      const ytdlpProcess = spawn(this.ytdlpPath, args);
+      const ytdlpProcess = spawn(this.ytdlpPath, args, { env: this.spawnEnv });
 
       ytdlpProcess.stdout.on('data', (data) => {
         output += data.toString();

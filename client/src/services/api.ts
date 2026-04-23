@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+// In development, use an empty base URL so all requests route through
+// Vite's proxy (/api → localhost:5000). In production, VITE_API_URL must be set.
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 const API_KEY = import.meta.env.VITE_API_KEY || '';
 
 const api = axios.create({
@@ -164,7 +166,9 @@ export const downloadVideo = async (
     let progressComplete = false;
 
     if (onProgress) {
-      const eventSource = new EventSource(`${API_BASE_URL}/api/video/progress/${downloadId}`);
+      // Use relative URL so SSE goes through Vite's proxy in development
+      const sseBase = API_BASE_URL || window.location.origin;
+      const eventSource = new EventSource(`${sseBase}/api/video/progress/${downloadId}`);
       let lastProgressTime = Date.now();
 
       eventSource.onopen = () => {
@@ -229,7 +233,8 @@ export const downloadVideo = async (
       await new Promise((resolve) => {
         const checkInterval = setInterval(async () => {
           try {
-            const statusResponse = await fetch(`${API_BASE_URL}/api/video/progress/${downloadId}`);
+            const statusBase = API_BASE_URL || window.location.origin;
+            const statusResponse = await fetch(`${statusBase}/api/video/progress/${downloadId}`);
             const reader = statusResponse.body?.getReader();
             if (reader) {
               const { value } = await reader.read();
@@ -297,7 +302,9 @@ export const downloadVideo = async (
     // Create a temporary link to force download
     // We can't use window.location.href directly efficiently for tracking completion,
     // but since we already waited for progress to complete, the file is ready.
-    const downloadUrl = `${API_BASE_URL}/api/video/file/${downloadId}`;
+    const downloadUrl = API_BASE_URL
+      ? `${API_BASE_URL}/api/video/file/${downloadId}`
+      : `/api/video/file/${downloadId}`;
 
     // Create invisible iframe or link to trigger download without navigation
     const link = document.createElement('a');
@@ -328,7 +335,8 @@ export const downloadVideo = async (
  */
 export const wakeServer = async (): Promise<{ status: string; timestamp: string }> => {
   try {
-    const response = await api.get<{ status: string; timestamp: string }>('/health', {
+    const healthUrl = API_BASE_URL ? `${API_BASE_URL}/health` : '/health';
+    const response = await api.get<{ status: string; timestamp: string }>(healthUrl, {
       timeout: 90000, // 90 seconds - Render cold starts can take 60+ seconds
     });
 

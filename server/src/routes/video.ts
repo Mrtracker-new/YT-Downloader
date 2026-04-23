@@ -84,36 +84,45 @@ router.get('/queue/:downloadId?', lenientRateLimiter, getQueueStatus);
  * @desc    Test yt-dlp functionality
  * @access  Public
  */
-router.get('/test', async (req, res) => {
+router.get('/test', async (_req, res) => {
   try {
     const { spawn } = await import('child_process');
-    const ytdlpPath = 'C:\\Users\\rolan\\AppData\\Local\\Microsoft\\WinGet\\Links\\yt-dlp.exe';
+    // Resolve yt-dlp via environment variable or system PATH
+    const ytdlpPath = process.env.YTDLP_PATH || 'yt-dlp';
 
-    const process = spawn(ytdlpPath, ['--version']);
+    const ytdlpProc = spawn(ytdlpPath, ['--version']);
     let version = '';
 
-    process.stdout.on('data', (data) => {
+    ytdlpProc.stdout.on('data', (data: Buffer) => {
       version += data.toString();
     });
 
-    process.on('close', (code) => {
+    ytdlpProc.on('close', (code: number | null) => {
       if (code === 0) {
         res.json({
           success: true,
           message: 'yt-dlp is working',
-          version: version.trim()
+          path:    ytdlpPath,
+          version: version.trim(),
         });
       } else {
         res.status(500).json({
           success: false,
-          error: 'yt-dlp failed to execute'
+          error: `yt-dlp exited with code ${code}`,
         });
       }
+    });
+
+    ytdlpProc.on('error', (err: Error) => {
+      res.status(500).json({
+        success: false,
+        error: `Failed to spawn yt-dlp: ${err.message}`,
+      });
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: (error as Error).message
+      error: (error as Error).message,
     });
   }
 });

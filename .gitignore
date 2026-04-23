@@ -50,6 +50,7 @@ docs_ignore/
 
 # Logs
 logs/
+bin/
 *.log
 
 # Database
