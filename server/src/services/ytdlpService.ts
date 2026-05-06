@@ -1,5 +1,5 @@
 import logger from '../utils/logger';
-import { spawn } from 'child_process';
+import { spawn, ChildProcess } from 'child_process';
 import { writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from 'fs';
 import { join, dirname, basename } from 'path';
 import { tmpdir } from 'os';
@@ -84,6 +84,9 @@ class YtDlpService {
   private pendingRequests: Map<string, Promise<YtDlpVideoInfo>> = new Map(); // Request deduplication
   private quickInfoCache: Map<string, { data: Partial<YtDlpVideoInfo>; timestamp: number }> = new Map(); // Separate cache for quick info
   private quickInfoTTL = 5 * 60 * 1000; // 5 minutes for quick info
+
+  /** Registry of active yt-dlp child processes keyed by downloadId. */
+  private activeProcesses: Map<string, ChildProcess> = new Map();
 
   constructor() {
     // Initialize cookies from environment variable if available
@@ -407,6 +410,12 @@ class YtDlpService {
       logger.info(`Starting process: ${this.ytdlpPath} ${args.join(' ')}`);
 
       const ytdlpProcess = spawn(this.ytdlpPath, args, { env: this.spawnEnv });
+
+      // Register process so it can be killed on cancellation
+      // The downloadId is the segment before the first '-' in the basename of outputPath
+      const downloadId = basename(outputPath).split('-')[0];
+      this.activeProcesses.set(downloadId, ytdlpProcess);
+      logger.info(`[ytdlpService] Registered process PID ${ytdlpProcess.pid} for downloadId ${downloadId}`);
       let stderr = '';
       let currentStatus = 'Downloading';
 
@@ -463,6 +472,8 @@ class YtDlpService {
       });
 
       ytdlpProcess.on('close', (code) => {
+        // Always deregister from active processes on close
+        this.activeProcesses.delete(downloadId);
         if (code === 0) {
           // Give filesystem a moment to flush writes (especially important on cloud platforms)
           setTimeout(() => {
@@ -510,9 +521,43 @@ class YtDlpService {
       });
 
       ytdlpProcess.on('error', (error) => {
+        this.activeProcesses.delete(downloadId);
         reject(new Error(`Failed to spawn yt-dlp: ${error.message}`));
       });
     });
+  }
+
+  /**
+   * Kill an active yt-dlp download process by downloadId.
+   * Returns true if a process was found and signalled, false otherwise.
+   */
+  killDownload(downloadId: string): boolean {
+    const proc = this.activeProcesses.get(downloadId);
+    if (!proc) {
+      logger.warn(`[ytdlpService] killDownload: no active process for ${downloadId}`);
+      return false;
+    }
+
+    try {
+      // On Windows, SIGKILL is not supported; use 'kill' with taskkill via SIGTERM equivalent
+      proc.kill('SIGTERM');
+      // Give 1 s grace then SIGKILL if still alive
+      const forceKillTimer = setTimeout(() => {
+        if (!proc.killed) {
+          try { proc.kill('SIGKILL'); } catch { /* already dead */ }
+        }
+      }, 1000);
+      // Avoid keeping the Node process alive just for cleanup
+      if (forceKillTimer.unref) forceKillTimer.unref();
+
+      this.activeProcesses.delete(downloadId);
+      logger.info(`[ytdlpService] Killed yt-dlp process for downloadId ${downloadId}`);
+      return true;
+    } catch (error) {
+      logger.error(`[ytdlpService] Failed to kill process for ${downloadId}:`, error);
+      this.activeProcesses.delete(downloadId);
+      return false;
+    }
   }
 
   /**
