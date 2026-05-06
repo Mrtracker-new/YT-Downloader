@@ -209,18 +209,17 @@ export const downloadVideo = async (req: Request, res: Response, next: NextFunct
       // Completion callback
       (error) => {
         if (error) {
-          logger.error(`Download failed: ${downloadId}`, error);
+          const isCancelled = error.message === 'Download cancelled by user';
+          logger.error(`Download ${isCancelled ? 'cancelled' : 'failed'}: ${downloadId}`, error);
           downloadProgress.set(downloadId, {
             progress: 0,
-            eta: 'Failed',
-            speed: 'Error',
-            done: false,
+            eta: isCancelled ? 'Cancelled' : 'Failed',
+            speed: isCancelled ? 'Cancelled' : 'Error',
+            done: true, // Signal SSE clients to close
             maxProgress: 0,
-            status: 'Error'
+            status: isCancelled ? 'Cancelled' : 'Error'
           });
           setTimeout(() => downloadProgress.delete(downloadId), 10000);
-          // Cleanup happens in getDownloadedFile after serving
-          // No need to delete here since we don't know the exact filename
         } else {
           // Mark as complete with done flag
           downloadProgress.set(downloadId, {
@@ -668,4 +667,52 @@ export const getQueueStatus = async (req: Request, res: Response): Promise<Respo
     });
   }
 };
+/**
+ * Cancel an in-progress or queued download
+ */
+export const cancelDownload = async (req: Request, res: Response): Promise<Response | void> => {
+  try {
+    const { downloadId } = req.params;
 
+    if (!downloadId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Download ID is required'
+      });
+    }
+
+    // Validate download ID format to prevent injection
+    try {
+      PathValidator.validateDownloadId(downloadId);
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid download ID format'
+      });
+    }
+
+    logger.info(`[cancelDownload] Cancelling download: ${downloadId}`);
+
+    const cancelled = downloadQueue.cancelDownload(downloadId);
+
+    if (cancelled) {
+      logger.info(`[cancelDownload] Successfully cancelled: ${downloadId}`);
+      return res.json({
+        success: true,
+        message: 'Download cancelled successfully'
+      });
+    } else {
+      // Not found — may have already completed or never existed
+      return res.status(404).json({
+        success: false,
+        error: 'Download not found or already completed'
+      });
+    }
+  } catch (error) {
+    logger.error('Error in cancelDownload:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to cancel download'
+    });
+  }
+};
