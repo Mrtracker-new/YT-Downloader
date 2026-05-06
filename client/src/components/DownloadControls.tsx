@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   Box,
   Button,
@@ -16,9 +16,10 @@ import {
   Audiotrack,
   Videocam,
   QrCode2 as QrCodeIcon,
+  StopCircle as CancelIcon,
 } from '@mui/icons-material';
 import toast from 'react-hot-toast';
-import { downloadVideo as downloadVideoApi, VideoInfo } from '../services/api';
+import { downloadVideo as downloadVideoApi, cancelDownload as cancelDownloadApi, VideoInfo } from '../services/api';
 import { notifyDownloadComplete, notifyDownloadFailed } from '../utils/notifications';
 import QRCodeModal from './QRCodeModal';
 
@@ -43,6 +44,12 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
   const [eta, setEta] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
   const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+
+  /** Stores the downloadId of the currently active download so we can cancel it. */
+  const activeDownloadIdRef = useRef<string | null>(null);
+  /** Allows us to signal the downloadVideoApi promise to abort SSE tracking. */
+  const cancelRequestedRef = useRef(false);
 
   const actualAvailableQualities = videoInfo.availableQualities || [];
 
@@ -70,6 +77,9 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
 
   const handleDownload = async () => {
     setDownloading(true);
+    setCancelling(false);
+    cancelRequestedRef.current = false;
+    activeDownloadIdRef.current = null;
     setProgress(0);
     setDownloadSpeed('');
     setEta('');
@@ -80,6 +90,12 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
       const url = `https://www.youtube.com/watch?v=${videoInfo.videoId}`;
 
       await downloadVideoApi(url, quality, audioOnly, (progressData) => {
+        // If a cancel was already requested server-side, reflect it in the UI
+        if (progressData.status === 'Cancelled') {
+          setStatusMessage('Cancelled');
+          return;
+        }
+
         setProgress(progressData.progress);
         setDownloadSpeed(progressData.speed);
         setEta(progressData.eta);
@@ -91,7 +107,15 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
         } else {
           setStatusMessage(`${Math.round(progressData.progress)}%`);
         }
+      }, (downloadId) => {
+        // Store the downloadId as soon as it is known
+        activeDownloadIdRef.current = downloadId;
       });
+
+      if (cancelRequestedRef.current) {
+        // Download was cancelled — already handled in handleCancel
+        return;
+      }
 
       toast.success('Download completed!', { id: toastId });
       setProgress(100);
@@ -104,6 +128,11 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
         audioOnly
       );
     } catch (error) {
+      if (cancelRequestedRef.current) {
+        // Swallow the error — it was triggered by our own cancel
+        toast.dismiss(toastId);
+        return;
+      }
       toast.error((error as Error).message || 'Download failed', { id: toastId });
       console.error('Download error:', error);
 
@@ -114,12 +143,33 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
       );
     } finally {
       setDownloading(false);
+      setCancelling(false);
+      activeDownloadIdRef.current = null;
+      cancelRequestedRef.current = false;
       setTimeout(() => {
         setProgress(0);
         setDownloadSpeed('');
         setEta('');
         setStatusMessage('');
       }, 3000);
+    }
+  };
+
+  const handleCancel = async () => {
+    const downloadId = activeDownloadIdRef.current;
+    if (!downloadId || cancelling) return;
+
+    setCancelling(true);
+    cancelRequestedRef.current = true;
+    setStatusMessage('Cancelling...');
+
+    try {
+      await cancelDownloadApi(downloadId);
+      toast.success('Download cancelled');
+    } catch (error) {
+      console.error('Cancel error:', error);
+      // Even if the API call fails, we still consider it cancelled from the user's perspective
+      toast.error('Could not cancel — download may have already completed');
     }
   };
 
@@ -235,6 +285,40 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
           )}
         </Button>
 
+        {/* Cancel Button — visible only while a download is in progress */}
+        <Fade in={downloading}>
+          <Tooltip title={cancelling ? 'Cancelling…' : 'Cancel download'}>
+            <span> {/* Tooltip needs a non-disabled child wrapper */}
+              <IconButton
+                id="cancel-download-btn"
+                onClick={handleCancel}
+                disabled={cancelling}
+                aria-label="Cancel download"
+                sx={{
+                  bgcolor: '#27272a',
+                  color: '#ef4444',
+                  width: 56,
+                  height: 56,
+                  borderRadius: '12px',
+                  flexShrink: 0,
+                  transition: 'background-color 0.2s ease, color 0.2s ease, transform 0.15s ease',
+                  '&:hover': {
+                    bgcolor: '#3f1010',
+                    color: '#f87171',
+                    transform: 'scale(1.05)',
+                  },
+                  '&.Mui-disabled': {
+                    bgcolor: '#18181b',
+                    color: '#7f1d1d',
+                  },
+                }}
+              >
+                <CancelIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+        </Fade>
+
         {/* QR Code Share Button */}
         <Tooltip title="Share via QR Code">
           <IconButton
@@ -246,6 +330,7 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
               width: 56,
               height: 56,
               borderRadius: '12px',
+              transition: 'background-color 0.2s ease',
               '&:hover': {
                 bgcolor: '#3f3f46',
               },
