@@ -8,7 +8,8 @@ import {
   getDownloadProgress,
   getDownloadedFile,
   streamVideo,
-  getQueueStatus
+  getQueueStatus,
+  cancelDownload
 } from '../controllers/videoController';
 import { strictRateLimiter, lenientRateLimiter, noRateLimit } from '../middleware/rateLimit';
 import { optionalAuth } from '../middleware/auth';
@@ -78,6 +79,13 @@ router.get('/stream', optionalAuth, strictRateLimiter, validateRequest(streamSch
  * @access  Public
  */
 router.get('/queue/:downloadId?', lenientRateLimiter, getQueueStatus);
+
+/**
+ * @route   DELETE /api/video/download/:downloadId
+ * @desc    Cancel an in-progress or queued download
+ * @access  Public
+ */
+router.delete('/download/:downloadId', lenientRateLimiter, cancelDownload);
 
 /**
  * @route   GET /api/video/test
