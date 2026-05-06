@@ -11,7 +11,7 @@ interface QueuedDownload {
     onComplete?: (error?: Error) => void;
     addedAt: number;
     startedAt?: number;
-    status: 'queued' | 'downloading' | 'completed' | 'failed';
+    status: 'queued' | 'downloading' | 'completed' | 'failed' | 'cancelled';
     queuePosition?: number;
 }
 
@@ -253,13 +253,21 @@ class DownloadQueue {
     }
 
     /**
-     * Remove a download from the queue (if not started yet)
+     * Cancel a download.
+     *
+     * Handles both cases:
+     *  1. Download is still waiting in queue   → remove it, fire onComplete with cancellation error.
+     *  2. Download is actively running         → kill the yt-dlp child process via ytdlpService,
+     *                                            then fire onComplete with cancellation error.
+     *
+     * Returns true when the download was found and cancelled, false when not found.
      */
     cancelDownload(downloadId: string): boolean {
+        // ── Case 1: download is still queued ─────────────────────────────────────
         const queueIndex = this.queue.findIndex(d => d.downloadId === downloadId);
-
         if (queueIndex !== -1) {
             const removed = this.queue.splice(queueIndex, 1)[0];
+            removed.status = 'cancelled';
             logger.info(`[DownloadQueue] Cancelled queued download: ${downloadId}`);
 
             if (removed.onComplete) {
@@ -270,6 +278,29 @@ class DownloadQueue {
             return true;
         }
 
+        // ── Case 2: download is actively running ──────────────────────────────────
+        const active = this.activeDownloads.get(downloadId);
+        if (active) {
+            logger.info(`[DownloadQueue] Cancelling active download: ${downloadId}`);
+            active.status = 'cancelled';
+
+            // Kill the underlying yt-dlp child process
+            const killed = ytdlpService.killDownload(downloadId);
+            logger.info(`[DownloadQueue] Kill signal sent for ${downloadId}: ${killed}`);
+
+            // Remove from active map so the slot is freed and the queue can advance
+            this.activeDownloads.delete(downloadId);
+
+            if (active.onComplete) {
+                active.onComplete(new Error('Download cancelled by user'));
+            }
+
+            // Allow the next queued item to start
+            this.processQueue();
+            return true;
+        }
+
+        logger.warn(`[DownloadQueue] cancelDownload: download ${downloadId} not found`);
         return false;
     }
 }
