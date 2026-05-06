@@ -142,7 +142,8 @@ export const downloadVideo = async (
   url: string,
   quality: string,
   audioOnly: boolean,
-  onProgress?: (progress: { progress: number; speed: string; eta: string; done?: boolean; status?: string }) => void
+  onProgress?: (progress: { progress: number; speed: string; eta: string; done?: boolean; status?: string }) => void,
+  onDownloadId?: (downloadId: string) => void
 ): Promise<void> => {
   try {
     // Step 1: Start the download and get download ID
@@ -161,6 +162,9 @@ export const downloadVideo = async (
 
     const { downloadId, filename } = startResponse.data.data;
     console.log('Download started:', downloadId, filename);
+
+    // Notify caller of the downloadId so it can be stored for cancellation
+    if (onDownloadId) onDownloadId(downloadId);
 
     // Step 2: Track progress via SSE
     let progressComplete = false;
@@ -325,6 +329,25 @@ export const downloadVideo = async (
     if (axios.isAxiosError(error)) {
       const errorMsg = error.response?.data?.error || error.message || 'Download failed';
       throw new Error(errorMsg);
+    }
+    throw error;
+  }
+};
+
+/**
+ * Cancel an in-progress or queued download
+ */
+export const cancelDownload = async (downloadId: string): Promise<void> => {
+  try {
+    const response = await api.delete<ApiResponse<null>>(`/api/video/download/${downloadId}`);
+    if (!response.data.success) {
+      throw new Error(response.data.error || 'Failed to cancel download');
+    }
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      // 404 = already completed, treat as non-error
+      if (error.response?.status === 404) return;
+      throw new Error(error.response?.data?.error || error.message || 'Failed to cancel download');
     }
     throw error;
   }
