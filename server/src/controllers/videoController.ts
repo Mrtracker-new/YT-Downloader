@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import videoService from '../services/videoService';
 import ytdlpService from '../services/ytdlpService';
+import type { SubtitleOptions } from '../services/ytdlpService';
 import downloadQueue from '../services/DownloadQueue';
 import logger from '../utils/logger';
 import { createReadStream, readdirSync, existsSync, mkdirSync } from 'fs';
@@ -130,7 +131,14 @@ export const getVideoInfo = async (req: Request, res: Response, next: NextFuncti
  */
 export const downloadVideo = async (req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
   try {
-    const { url, quality = '720p', audioOnly = false } = req.body;
+    const { url, quality = '720p', audioOnly = false, subtitleOptions } = req.body;
+
+    const resolvedSubtitleOptions: SubtitleOptions = {
+      enabled: subtitleOptions?.enabled ?? false,
+      language: subtitleOptions?.language ?? 'en',
+      mode: subtitleOptions?.mode ?? 'embed',
+      includeAuto: subtitleOptions?.includeAuto ?? true,
+    };
 
     if (!url) {
       return res.status(400).json({
@@ -184,6 +192,7 @@ export const downloadVideo = async (req: Request, res: Response, next: NextFunct
       quality,
       audioOnly,
       outputTemplate,
+      resolvedSubtitleOptions,
       // Progress callback
       (progress, eta, speed, status) => {
         // Get current max progress to prevent backwards jumps (happens with multi-stream downloads)
@@ -316,13 +325,24 @@ export const getDownloadedFile = async (req: Request, res: Response): Promise<Re
       });
     }
 
-    const files = readdirSync(tempDir);
-    logger.info(`[getDownloadedFile] Files in directory: ${JSON.stringify(files)}`);
-    const targetFile = files.find((f: string) => f.startsWith(downloadId));
+    const allFiles = readdirSync(tempDir);
+    logger.info(`[getDownloadedFile] Files in directory: ${JSON.stringify(allFiles)}`);
+
+    // Priority-aware selector: prefer media extensions, never return a bare subtitle file.
+    const MEDIA_EXTS    = ['.mp4', '.mp3', '.webm', '.mkv', '.m4a', '.ogg', '.opus', '.flac'];
+    const SUBTITLE_EXTS = ['.srt', '.vtt', '.ass', '.ssa', '.ttml', '.srv1', '.srv2', '.srv3', '.json3'];
+    const isMedia    = (f: string) => MEDIA_EXTS.some(e => f.toLowerCase().endsWith(e));
+    const isSubtitle = (f: string) => SUBTITLE_EXTS.some(e => f.toLowerCase().endsWith(e));
+
+    const candidates = allFiles.filter((f: string) => f.startsWith(downloadId));
+    const targetFile = candidates.find(isMedia)
+                    ?? candidates.find(f => !isSubtitle(f));
+
+    logger.info(`[getDownloadedFile] Candidates: ${JSON.stringify(candidates)}, selected: ${targetFile}`);
 
     if (!targetFile) {
       logger.error(`[getDownloadedFile] File not found for download ID: ${downloadId}`);
-      logger.error(`[getDownloadedFile] Available files: ${files.join(', ')}`);
+      logger.error(`[getDownloadedFile] Available files: ${allFiles.join(', ')}`);
       return res.status(404).json({
         success: false,
         error: 'Download not found or expired'
@@ -714,5 +734,131 @@ export const cancelDownload = async (req: Request, res: Response): Promise<Respo
       success: false,
       error: 'Failed to cancel download'
     });
+  }
+};
+
+/**
+ * Get available subtitle languages for a video.
+ * Re-uses the cached --dump-json result so no extra yt-dlp call is needed
+ * for videos already fetched via getVideoInfo.
+ */
+export const getSubtitleLanguages = async (req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
+  try {
+    const url = (req.query.url || req.body.url) as string | undefined;
+
+    if (!url) {
+      return res.status(400).json({ success: false, error: 'URL is required' });
+    }
+
+    const videoInfo = await ytdlpService.getVideoInfo(url);
+
+    // Build language lists from the cached info object
+    const manualLangs = Object.keys(videoInfo.subtitles);
+    const autoLangs = Object.keys(videoInfo.automaticCaptions);
+
+    // Deduplicate and sort; prefer manual over auto
+    const allManual = [...new Set(manualLangs)].sort();
+    const autoOnly  = [...new Set(autoLangs.filter(l => !manualLangs.includes(l)))].sort();
+
+    // Map to { code, name } pairs for the UI dropdown
+    const toEntry = (code: string, tracks: Record<string, any[]>) => ({
+      code,
+      name: tracks[code]?.[0]?.name || code
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        manual: allManual.map(c => toEntry(c, videoInfo.subtitles)),
+        auto:   autoOnly.map(c => toEntry(c, videoInfo.automaticCaptions)),
+      }
+    });
+  } catch (error) {
+    logger.error('Error in getSubtitleLanguages:', error);
+    next(error);
+  }
+};
+
+/**
+ * Serve a sidecar subtitle file (.srt/.vtt) for a completed download.
+ * The file is identified by the same downloadId prefix used for the video.
+ */
+export const getSubtitleFile = async (req: Request, res: Response): Promise<Response | void> => {
+  try {
+    const { downloadId } = req.params;
+
+    if (!downloadId) {
+      return res.status(400).json({ success: false, error: 'Download ID is required' });
+    }
+
+    try {
+      PathValidator.validateDownloadId(downloadId);
+    } catch (error) {
+      return res.status(400).json({ success: false, error: 'Invalid download ID format' });
+    }
+
+    // Verify the download is complete before serving
+    if (!downloadQueue.isDownloadComplete(downloadId)) {
+      return res.status(202).json({
+        success: false,
+        error: 'Download is still in progress',
+        status: 'processing'
+      });
+    }
+
+    const tempDir = process.env.TEMP_PATH || resolve(process.cwd(), 'temp');
+
+    // Validate tempDir itself exists
+    if (!existsSync(tempDir)) {
+      return res.status(404).json({ success: false, error: 'Temp directory not found' });
+    }
+
+    const subtitleFiles = ytdlpService.getSidecarSubtitleFiles(tempDir, downloadId);
+
+    if (subtitleFiles.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'No subtitle file found for this download. Ensure sidecar mode was used.'
+      });
+    }
+
+    // Serve the first subtitle file found (usually there is exactly one per language)
+    const subtitlePath = subtitleFiles[0];
+
+    // Path-traversal guard
+    try {
+      PathValidator.validatePath(subtitlePath, tempDir);
+    } catch {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const { statSync } = require('fs');
+    const fileStats = statSync(subtitlePath);
+
+    const rawFilename = require('path').basename(subtitlePath);
+    // Strip the downloadId prefix for the user-facing filename
+    const dashIndex = rawFilename.indexOf('-');
+    const userFilename = dashIndex !== -1 ? rawFilename.substring(dashIndex + 1) : rawFilename;
+    const safeFilename = userFilename.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '').substring(0, 200);
+
+    res.writeHead(200, {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Content-Length': fileStats.size,
+      'Content-Disposition': `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(userFilename)}`,
+      'X-Suggested-Filename': encodeURIComponent(userFilename),
+      'Access-Control-Expose-Headers': 'Content-Disposition, X-Suggested-Filename, Content-Length',
+      'Cache-Control': 'no-cache',
+    });
+
+    const fileStream = createReadStream(subtitlePath);
+    fileStream.on('error', (err) => {
+      logger.error('Subtitle file stream error:', err);
+    });
+    fileStream.pipe(res);
+  } catch (error) {
+    logger.error('Error in getSubtitleFile:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: 'Failed to retrieve subtitle file' });
+    }
   }
 };
