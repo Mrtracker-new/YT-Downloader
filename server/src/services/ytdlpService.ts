@@ -4,6 +4,34 @@ import { writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from 'fs'
 import { join, dirname, basename } from 'path';
 import { tmpdir } from 'os';
 
+/** A single subtitle track entry returned by yt-dlp for a given language. */
+export interface YtDlpSubtitleTrack {
+  ext: string;   // e.g. 'vtt', 'srv1', 'ttml'
+  url?: string;
+  name?: string; // Human-readable language name when provided by yt-dlp
+}
+
+/**
+ * Options that control subtitle behaviour during a download.
+ * `enabled: false` means no subtitle flags are added to yt-dlp at all.
+ */
+export interface SubtitleOptions {
+  /** Whether to download subtitles at all. */
+  enabled: boolean;
+  /**
+   * BCP-47 language code, e.g. 'en', 'hi', 'fr'.
+   * Pass 'all' to download every available language.
+   */
+  language: string;
+  /**
+   * 'embed'   → mux subtitle track into the MP4 container via --embed-subs.
+   * 'sidecar' → write a separate .srt file via --convert-subs srt.
+   */
+  mode: 'embed' | 'sidecar';
+  /** Also include auto-generated captions via --write-auto-subs. */
+  includeAuto: boolean;
+}
+
 export interface YtDlpVideoInfo {
   id: string;
   title: string;
@@ -12,6 +40,10 @@ export interface YtDlpVideoInfo {
   thumbnail: string;
   description: string;
   formats: YtDlpFormat[];
+  /** Manual subtitle tracks keyed by language code. */
+  subtitles: Record<string, YtDlpSubtitleTrack[]>;
+  /** Auto-generated caption tracks keyed by language code. */
+  automaticCaptions: Record<string, YtDlpSubtitleTrack[]>;
 }
 
 export interface YtDlpFormat {
@@ -286,7 +318,9 @@ class YtDlpService {
               duration: info.duration || 0,
               thumbnail: info.thumbnail || '',
               description: info.description || '',
-              formats: info.formats || []
+              formats: info.formats || [],
+              subtitles: info.subtitles || {},
+              automaticCaptions: info.automatic_captions || {},
             };
 
             console.log(`[ytdlpService] Successfully parsed video info: ${info.title}`);
@@ -348,6 +382,7 @@ class YtDlpService {
     quality: string,
     audioOnly: boolean,
     outputPath: string,
+    subtitleOptions: SubtitleOptions = { enabled: false, language: 'en', mode: 'embed', includeAuto: true },
     onProgress?: (progress: number, eta: string, speed: string, status?: string) => void
   ): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -403,6 +438,40 @@ class YtDlpService {
         args.push('--merge-output-format', 'mp4'); // Ensure final container is MP4
         logger.info(`Mode: Video Download (${quality}) - Format: ${formatString}`);
       }
+
+      // ── Subtitle args ──────────────────────────────────────────────────────
+      if (subtitleOptions.enabled && !audioOnly) {
+        // RESILIENCE: subtitle fetch failures (429 rate-limit, language not
+        // available, cookie-wall, etc.) must NEVER abort the video download.
+        // --ignore-errors  → treat subtitle/post-processing failures as warnings
+        // --no-abort-on-error → same semantics for playlist/batch context
+        args.push('--ignore-errors');
+        args.push('--no-abort-on-error');
+
+        // Always request subtitle writing
+        args.push('--write-subs');
+
+        // Also fetch auto-generated captions when requested
+        if (subtitleOptions.includeAuto) {
+          args.push('--write-auto-subs');
+        }
+
+        // Language selection — 'all' downloads every available language
+        const langCode = subtitleOptions.language || 'en';
+        args.push('--sub-langs', langCode);
+
+        if (subtitleOptions.mode === 'embed') {
+          // Mux subtitle track into the MP4 container
+          args.push('--embed-subs');
+          logger.info(`[ytdlpService] Subtitle mode: embed (lang: ${langCode})`);
+        } else {
+          // Write separate .srt file alongside the video
+          args.push('--convert-subs', 'srt');
+          logger.info(`[ytdlpService] Subtitle mode: sidecar .srt (lang: ${langCode})`);
+        }
+      }
+      // ──────────────────────────────────────────────────────────────────────
+
 
       args.push('-o', outputPath);
       args.push(url);
@@ -484,11 +553,32 @@ class YtDlpService {
 
             logger.info(`Looking for file with prefix: "${expectedPrefix}" in ${dir}`);
 
+            /** Extensions that represent a completed primary media download. */
+            const MEDIA_EXTS = ['.mp4', '.mp3', '.webm', '.mkv', '.m4a', '.ogg', '.opus', '.flac'];
+            /** Extensions that are subtitle sidecars — never the primary deliverable. */
+            const SUBTITLE_EXTS = ['.srt', '.vtt', '.ass', '.ssa', '.ttml', '.srv1', '.srv2', '.srv3', '.json3'];
+
+            /**
+             * Priority-aware file selector.
+             * 1. Prefer an exact media extension match.
+             * 2. Fall back to anything that is not a subtitle.
+             * 3. Never return a bare subtitle file as the primary download.
+             */
+            const selectPrimaryFile = (candidates: string[]): string | undefined => {
+              const isMedia    = (f: string) => MEDIA_EXTS.some(e => f.toLowerCase().endsWith(e));
+              const isSubtitle = (f: string) => SUBTITLE_EXTS.some(e => f.toLowerCase().endsWith(e));
+              return candidates.find(isMedia)
+                  ?? candidates.find(f => !isSubtitle(f));
+            };
+
             try {
               const files = readdirSync(dir);
               logger.info(`Files in directory: ${JSON.stringify(files)}`);
 
-              const matchingFile = files.find((f: string) => f.startsWith(expectedPrefix));
+              const candidates = files.filter((f: string) => f.startsWith(expectedPrefix));
+              const matchingFile = selectPrimaryFile(candidates);
+
+              logger.info(`Candidate files: ${JSON.stringify(candidates)}, selected: ${matchingFile}`);
 
               if (matchingFile) {
                 const actualPath = join(dir, matchingFile);
@@ -557,6 +647,28 @@ class YtDlpService {
       logger.error(`[ytdlpService] Failed to kill process for ${downloadId}:`, error);
       this.activeProcesses.delete(downloadId);
       return false;
+    }
+  }
+
+  /**
+   * Find any sidecar subtitle files (.srt / .vtt) produced for a given downloadId.
+   * yt-dlp writes them alongside the video using the same output template, so they
+   * share the same {downloadId}- prefix.
+   *
+   * @param dir      The temp directory to search.
+   * @param downloadId  The download ID prefix to match.
+   * @returns Array of absolute paths to subtitle files found (may be empty).
+   */
+  getSidecarSubtitleFiles(dir: string, downloadId: string): string[] {
+    try {
+      const subtitleExts = ['.srt', '.vtt', '.ass', '.ssa'];
+      const files = readdirSync(dir);
+      return files
+        .filter(f => f.startsWith(downloadId) && subtitleExts.some(ext => f.toLowerCase().endsWith(ext)))
+        .map(f => join(dir, f));
+    } catch (err) {
+      logger.error('[ytdlpService] Error scanning for subtitle files:', err);
+      return [];
     }
   }
 
