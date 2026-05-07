@@ -43,6 +43,21 @@ export interface VideoFormat {
   contentLength?: string;
 }
 
+/**
+ * Controls subtitle behaviour when triggering a download.
+ * Mirrors the server-side SubtitleOptions interface.
+ */
+export interface SubtitleOptions {
+  /** Whether subtitles should be downloaded at all. */
+  enabled: boolean;
+  /** BCP-47 language code, e.g. 'en', 'hi', 'fr'. Use 'all' for every language. */
+  language: string;
+  /** 'embed' muxes the track into the MP4; 'sidecar' produces a separate .srt file. */
+  mode: 'embed' | 'sidecar';
+  /** Also fetch auto-generated captions. */
+  includeAuto: boolean;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
@@ -142,6 +157,7 @@ export const downloadVideo = async (
   url: string,
   quality: string,
   audioOnly: boolean,
+  subtitleOptions: SubtitleOptions = { enabled: false, language: 'en', mode: 'embed', includeAuto: true },
   onProgress?: (progress: { progress: number; speed: string; eta: string; done?: boolean; status?: string }) => void,
   onDownloadId?: (downloadId: string) => void
 ): Promise<void> => {
@@ -149,7 +165,7 @@ export const downloadVideo = async (
     // Step 1: Start the download and get download ID
     const startResponse = await api.post<ApiResponse<{ downloadId: string; filename: string }>>(
       '/api/video/download',
-      { url, quality, audioOnly }
+      { url, quality, audioOnly, subtitleOptions }
     );
 
     console.log('Start response:', startResponse.data);
@@ -168,6 +184,8 @@ export const downloadVideo = async (
 
     // Step 2: Track progress via SSE
     let progressComplete = false;
+    // Captures a server-reported failure message so we can throw after SSE closes.
+    let downloadError: string | null = null;
 
     if (onProgress) {
       // Use relative URL so SSE goes through Vite's proxy in development
@@ -185,8 +203,29 @@ export const downloadVideo = async (
           lastProgressTime = Date.now();
           onProgress(progressData);
 
-          if (progressData.progress >= 100 || progressData.done) {
-            console.log('✅ Download complete');
+          if (progressData.done) {
+            // Distinguish a successful completion from a server-side failure.
+            // status='Error' means yt-dlp failed; status='Cancelled' means user cancelled.
+            const isFailure =
+              progressData.status === 'Error' ||
+              progressData.status === 'Cancelled' ||
+              progressData.status === 'Failed';
+
+            if (isFailure) {
+              const msg =
+                progressData.status === 'Cancelled'
+                  ? 'Download cancelled by user'
+                  : 'Download failed on server — check server logs';
+              console.error('❌ Server reported failure:', progressData.status);
+              downloadError = msg;
+            } else {
+              console.log('✅ Download complete');
+            }
+
+            progressComplete = true;
+            eventSource.close();
+          } else if (progressData.progress >= 100) {
+            console.log('✅ Download complete (100%)');
             progressComplete = true;
             eventSource.close();
           }
@@ -263,9 +302,15 @@ export const downloadVideo = async (
       });
     }
 
+    // If the server signalled a failure (Error / Cancelled), throw now — do NOT attempt file retrieval.
+    if (downloadError) {
+      throw new Error(downloadError);
+    }
+
     // Give the server a moment to finalize the file write
     console.log('Download complete, waiting 2 seconds before retrieval...');
     await new Promise(resolve => setTimeout(resolve, 2000));
+
 
     // Step 4: Wait for file to be fully ready (merged)
     // yt-dlp may still be merging fragments even after progress shows 100%
@@ -351,6 +396,40 @@ export const cancelDownload = async (downloadId: string): Promise<void> => {
     }
     throw error;
   }
+};
+
+/**
+ * Fetch available subtitle languages for a video.
+ * Returns two lists: manual (uploaded) captions and auto-generated captions.
+ */
+export const getSubtitleLanguages = async (
+  url: string
+): Promise<{ manual: { code: string; name: string }[]; auto: { code: string; name: string }[] }> => {
+  const response = await api.get<ApiResponse<{ manual: { code: string; name: string }[]; auto: { code: string; name: string }[] }>>(
+    '/api/video/subtitles',
+    { params: { url } }
+  );
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.error || 'Failed to fetch subtitle languages');
+  }
+  return response.data.data;
+};
+
+/**
+ * Trigger a browser download of the sidecar subtitle file (.srt) produced
+ * after a download with mode = 'sidecar'.
+ */
+export const downloadSubtitleFile = (downloadId: string): void => {
+  const subtitleUrl = API_BASE_URL
+    ? `${API_BASE_URL}/api/video/subtitle/${downloadId}`
+    : `/api/video/subtitle/${downloadId}`;
+
+  const link = document.createElement('a');
+  link.href = subtitleUrl;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => document.body.removeChild(link), 1000);
 };
 
 /**
