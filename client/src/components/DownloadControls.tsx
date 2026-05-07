@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Box,
   Button,
@@ -10,6 +10,13 @@ import {
   Fade,
   IconButton,
   Tooltip,
+  Select,
+  MenuItem,
+  FormControl,
+  FormControlLabel,
+  Checkbox,
+  Collapse,
+  CircularProgress,
 } from '@mui/material';
 import {
   Download as DownloadIcon,
@@ -17,9 +24,10 @@ import {
   Videocam,
   QrCode2 as QrCodeIcon,
   StopCircle as CancelIcon,
+  ClosedCaption as SubtitleIcon,
 } from '@mui/icons-material';
 import toast from 'react-hot-toast';
-import { downloadVideo as downloadVideoApi, cancelDownload as cancelDownloadApi, VideoInfo } from '../services/api';
+import { downloadVideo as downloadVideoApi, cancelDownload as cancelDownloadApi, getSubtitleLanguages, downloadSubtitleFile, SubtitleOptions, VideoInfo } from '../services/api';
 import { notifyDownloadComplete, notifyDownloadFailed } from '../utils/notifications';
 import QRCodeModal from './QRCodeModal';
 
@@ -46,12 +54,54 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
+  // ── Subtitle state ────────────────────────────────────────────────────────
+  type SubtitleMode = 'off' | 'embed' | 'sidecar';
+  const [subtitleMode, setSubtitleMode] = useState<SubtitleMode>('off');
+  const [subtitleLang, setSubtitleLang] = useState('en');
+  const [subtitleIncludeAuto, setSubtitleIncludeAuto] = useState(true);
+  const [subtitleLangs, setSubtitleLangs] = useState<{ code: string; name: string }[]>([]);
+  const [loadingLangs, setLoadingLangs] = useState(false);
+  // ─────────────────────────────────────────────────────────────────────────
+
   /** Stores the downloadId of the currently active download so we can cancel it. */
   const activeDownloadIdRef = useRef<string | null>(null);
   /** Allows us to signal the downloadVideoApi promise to abort SSE tracking. */
   const cancelRequestedRef = useRef(false);
 
   const actualAvailableQualities = videoInfo.availableQualities || [];
+
+  // ── Load subtitle languages lazily when the user enables subtitles ────────
+  useEffect(() => {
+    if (subtitleMode === 'off' || audioOnly) return;
+
+    setLoadingLangs(true);
+    const videoUrl = `https://www.youtube.com/watch?v=${videoInfo.videoId}`;
+    getSubtitleLanguages(videoUrl)
+      .then(data => {
+        // Merge manual + auto, deduplicate by code, manual takes priority
+        const seen = new Set<string>();
+        const merged: { code: string; name: string }[] = [];
+        for (const entry of [...data.manual, ...data.auto]) {
+          if (!seen.has(entry.code)) {
+            seen.add(entry.code);
+            merged.push(entry);
+          }
+        }
+        setSubtitleLangs(merged);
+        // Default selection: prefer 'en' if available
+        if (merged.length > 0 && !merged.find(l => l.code === subtitleLang)) {
+          setSubtitleLang(merged[0].code);
+        }
+      })
+      .catch(err => {
+        console.warn('[DownloadControls] Could not fetch subtitle languages:', err);
+        // Fall back to manual 'en' entry so the panel stays usable
+        setSubtitleLangs([{ code: 'en', name: 'English' }]);
+      })
+      .finally(() => setLoadingLangs(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subtitleMode, audioOnly, videoInfo.videoId]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   const qualityLabelMap: Record<string, string> = {
     '2160p': '4K',
@@ -71,8 +121,15 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
 
   const handleFormatChange = (_event: React.MouseEvent<HTMLElement>, newFormat: string | null) => {
     if (newFormat !== null) {
-      setAudioOnly(newFormat === 'audio');
+      const isAudio = newFormat === 'audio';
+      setAudioOnly(isAudio);
+      // Subtitles only make sense for video
+      if (isAudio) setSubtitleMode('off');
     }
+  };
+
+  const handleSubtitleModeChange = (_event: React.MouseEvent<HTMLElement>, newMode: string | null) => {
+    if (newMode !== null) setSubtitleMode(newMode as SubtitleMode);
   };
 
   const handleDownload = async () => {
@@ -86,10 +143,20 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
     setStatusMessage('Starting...');
     const toastId = toast.loading(audioOnly ? 'Downloading audio...' : 'Downloading video...');
 
+    // Build subtitle options from current UI state
+    const subtitleOptions: SubtitleOptions = subtitleMode === 'off' || audioOnly
+      ? { enabled: false, language: subtitleLang, mode: 'embed', includeAuto: subtitleIncludeAuto }
+      : {
+          enabled: true,
+          language: subtitleLang,
+          mode: subtitleMode as 'embed' | 'sidecar',
+          includeAuto: subtitleIncludeAuto,
+        };
+
     try {
       const url = `https://www.youtube.com/watch?v=${videoInfo.videoId}`;
 
-      await downloadVideoApi(url, quality, audioOnly, (progressData) => {
+      await downloadVideoApi(url, quality, audioOnly, subtitleOptions, (progressData) => {
         // If a cancel was already requested server-side, reflect it in the UI
         if (progressData.status === 'Cancelled') {
           setStatusMessage('Cancelled');
@@ -120,6 +187,15 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
       toast.success('Download completed!', { id: toastId });
       setProgress(100);
       setStatusMessage('Done');
+
+      // If sidecar subtitle mode was used, trigger the .srt download automatically
+      if (subtitleOptions.enabled && subtitleOptions.mode === 'sidecar' && activeDownloadIdRef.current) {
+        // Small delay so the browser doesn't block the second download
+        setTimeout(() => {
+          downloadSubtitleFile(activeDownloadIdRef.current!);
+          toast.success('Subtitle file (.srt) downloaded!', { duration: 3000 });
+        }, 800);
+      }
 
       // Show smart notification
       await notifyDownloadComplete(
@@ -247,6 +323,138 @@ const DownloadControls: React.FC<DownloadControlsProps> = ({ videoInfo }) => {
           </Grid>
         </Box>
       )}
+
+      {/* ── Subtitles Panel ─────────────────────────────────────────────────── */}
+      {!audioOnly && (
+        <Box mb={4}>
+          <Typography
+            variant="subtitle2"
+            color="text.secondary"
+            gutterBottom
+            fontWeight={600}
+            sx={{ textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 0.75 }}
+          >
+            <SubtitleIcon sx={{ fontSize: 16 }} />
+            Subtitles
+          </Typography>
+
+          {/* Mode selector */}
+          <ToggleButtonGroup
+            value={subtitleMode}
+            exclusive
+            onChange={handleSubtitleModeChange}
+            fullWidth
+            disabled={downloading}
+            sx={{
+              bgcolor: '#18181b',
+              border: '1px solid #27272a',
+              borderRadius: '12px',
+              p: 0.5,
+              '& .MuiToggleButton-root': {
+                border: 0,
+                borderRadius: '8px',
+                color: 'text.secondary',
+                textTransform: 'none',
+                fontWeight: 600,
+                py: 0.85,
+                fontSize: '0.85rem',
+                '&.Mui-selected': {
+                  bgcolor: '#27272a',
+                  color: '#fff',
+                  '&:hover': { bgcolor: '#3f3f46' },
+                },
+              },
+            }}
+          >
+            <ToggleButton value="off">Off</ToggleButton>
+            <ToggleButton value="embed">Embed</ToggleButton>
+            <ToggleButton value="sidecar">Sidecar (.srt)</ToggleButton>
+          </ToggleButtonGroup>
+
+          {/* Language + auto-caption options — shown only when subtitles are enabled */}
+          <Collapse in={subtitleMode !== 'off'} timeout={220}>
+            <Box mt={1.5} display="flex" gap={1.5} alignItems="center" flexWrap="wrap">
+              {/* Language dropdown */}
+              <FormControl size="small" sx={{ minWidth: 180, flex: 1 }}>
+                <Select
+                  value={subtitleLang}
+                  onChange={e => setSubtitleLang(e.target.value)}
+                  disabled={downloading || loadingLangs}
+                  displayEmpty
+                  startAdornment={
+                    loadingLangs
+                      ? <CircularProgress size={14} sx={{ mr: 1, color: 'text.secondary' }} />
+                      : null
+                  }
+                  sx={{
+                    bgcolor: '#18181b',
+                    border: '1px solid #27272a',
+                    borderRadius: '8px',
+                    color: 'text.primary',
+                    fontSize: '0.85rem',
+                    '& .MuiOutlinedInput-notchedOutline': { border: 'none' },
+                    '& .MuiSvgIcon-root': { color: 'text.secondary' },
+                  }}
+                  MenuProps={{
+                    PaperProps: {
+                      sx: {
+                        bgcolor: '#18181b',
+                        border: '1px solid #27272a',
+                        borderRadius: '8px',
+                        '& .MuiMenuItem-root': {
+                          fontSize: '0.85rem',
+                          '&:hover': { bgcolor: '#27272a' },
+                          '&.Mui-selected': { bgcolor: '#3f3f46', '&:hover': { bgcolor: '#52525b' } },
+                        },
+                      },
+                    },
+                  }}
+                >
+                  {/* Static fallback if languages haven't loaded yet */}
+                  {subtitleLangs.length === 0 && (
+                    <MenuItem value="en">English (en)</MenuItem>
+                  )}
+                  {subtitleLangs.map(lang => (
+                    <MenuItem key={lang.code} value={lang.code}>
+                      {lang.name !== lang.code ? `${lang.name} (${lang.code})` : lang.code}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              {/* Auto-captions toggle */}
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={subtitleIncludeAuto}
+                    onChange={e => setSubtitleIncludeAuto(e.target.checked)}
+                    disabled={downloading}
+                    size="small"
+                    sx={{
+                      color: '#52525b',
+                      '&.Mui-checked': { color: '#a1a1aa' },
+                    }}
+                  />
+                }
+                label={
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.78rem' }}>
+                    Include auto-captions
+                  </Typography>
+                }
+                sx={{ m: 0, flexShrink: 0 }}
+              />
+            </Box>
+
+            {/* Contextual hint */}
+            <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.75, fontSize: '0.72rem', lineHeight: 1.4 }}>
+              {subtitleMode === 'embed'
+                ? 'Subtitle track will be muxed into the MP4 (selectable in media players).'
+                : 'A separate .srt file will be downloaded automatically after the video.'}
+            </Typography>
+          </Collapse>
+        </Box>
+      )}
+      {/* ──────────────────────────────────────────────────────────────────────── */}
 
       {/* Main Action */}
       <Box display="flex" gap={1.5} alignItems="center">
