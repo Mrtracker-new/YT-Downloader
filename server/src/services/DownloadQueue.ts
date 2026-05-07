@@ -1,4 +1,4 @@
-import ytdlpService from './ytdlpService';
+import ytdlpService, { SubtitleOptions } from './ytdlpService';
 import logger from '../utils/logger';
 
 interface QueuedDownload {
@@ -7,6 +7,7 @@ interface QueuedDownload {
     quality: string;
     audioOnly: boolean;
     outputPath: string;
+    subtitleOptions: SubtitleOptions;
     onProgress?: (progress: number, eta: string, speed: string, status?: string) => void;
     onComplete?: (error?: Error) => void;
     addedAt: number;
@@ -43,6 +44,7 @@ class DownloadQueue {
         quality: string,
         audioOnly: boolean,
         outputPath: string,
+        subtitleOptions: SubtitleOptions,
         onProgress?: (progress: number, eta: string, speed: string, status?: string) => void,
         onComplete?: (error?: Error) => void
     ): Promise<{ queued: boolean; position?: number; error?: string }> {
@@ -59,6 +61,7 @@ class DownloadQueue {
             quality,
             audioOnly,
             outputPath,
+            subtitleOptions,
             onProgress,
             onComplete,
             addedAt: Date.now(),
@@ -110,6 +113,7 @@ class DownloadQueue {
                 download.quality,
                 download.audioOnly,
                 download.outputPath,
+                download.subtitleOptions,
                 download.onProgress
             );
 
