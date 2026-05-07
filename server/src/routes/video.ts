@@ -9,7 +9,9 @@ import {
   getDownloadedFile,
   streamVideo,
   getQueueStatus,
-  cancelDownload
+  cancelDownload,
+  getSubtitleLanguages,
+  getSubtitleFile
 } from '../controllers/videoController';
 import { strictRateLimiter, lenientRateLimiter, noRateLimit } from '../middleware/rateLimit';
 import { optionalAuth } from '../middleware/auth';
@@ -86,6 +88,20 @@ router.get('/queue/:downloadId?', lenientRateLimiter, getQueueStatus);
  * @access  Public
  */
 router.delete('/download/:downloadId', lenientRateLimiter, cancelDownload);
+
+/**
+ * @route   GET /api/video/subtitles?url=...
+ * @desc    Get available subtitle languages for a video (re-uses cached video info)
+ * @access  Protected (requires auth)
+ */
+router.get('/subtitles', optionalAuth, lenientRateLimiter, getSubtitleLanguages);
+
+/**
+ * @route   GET /api/video/subtitle/:downloadId
+ * @desc    Retrieve sidecar subtitle file (.srt) for a completed download
+ * @access  Public
+ */
+router.get('/subtitle/:downloadId', noRateLimit, getSubtitleFile);
 
 /**
  * @route   GET /api/video/test
