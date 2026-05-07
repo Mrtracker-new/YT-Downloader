@@ -134,7 +134,7 @@ export class PathValidator {
  * Filename Validator - Secure filename generation
  */
 export class FilenameValidator {
-  private static readonly ALLOWED_EXTENSIONS = ['mp4', 'mp3', 'webm'];
+  private static readonly ALLOWED_EXTENSIONS = ['mp4', 'mp3', 'webm', 'srt', 'vtt'];
 
   /**
    * Create safe filename from title and extension
@@ -199,7 +199,13 @@ export const downloadSchema = Joi.object({
   quality: Joi.string()
     .valid('144p', '240p', '360p', '480p', '720p', '1080p', '1440p', '2160p', '4320p', 'max', 'best')
     .default('720p'),
-  audioOnly: Joi.boolean().default(false)
+  audioOnly: Joi.boolean().default(false),
+  subtitleOptions: Joi.object({
+    enabled: Joi.boolean().default(false),
+    language: Joi.string().max(20).default('en'),
+    mode: Joi.string().valid('embed', 'sidecar').default('embed'),
+    includeAuto: Joi.boolean().default(true),
+  }).default({ enabled: false, language: 'en', mode: 'embed', includeAuto: true })
 });
 
 export const urlValidationSchema = Joi.object({
