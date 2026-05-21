@@ -219,6 +219,23 @@ echo   [OK] Created client\.env with safe defaults.
 
 :client_env_done
 
+:: Auto-generate API key and patch both .env files (only if placeholders still present)
+powershell -NoProfile -Command ^
+  "$sf='%SERVER_DIR%\.env'; $cf='%CLIENT_DIR%\.env'; ^
+   $sl=Get-Content $sf -Raw; ^
+   if ($sl -match 'API_KEYS=your_api_key' -or $sl -match 'API_KEYS=,*$' -or $sl -match 'API_KEYS=$') { ^
+     $key = [System.BitConverter]::ToString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)) -replace '-',''; $key = $key.ToLower(); ^
+     $sl2 = Get-Content $sf; ^
+     $sl2 = $sl2 | ForEach-Object { if ($_ -match '^API_KEYS=') { 'API_KEYS=' + $key } elseif ($_ -match '^REQUIRE_AUTH=') { 'REQUIRE_AUTH=false' } else { $_ } }; ^
+     Set-Content $sf $sl2; ^
+     $cl2 = Get-Content $cf; ^
+     $cl2 = $cl2 | ForEach-Object { if ($_ -match '^VITE_API_KEY=') { 'VITE_API_KEY=' + $key } else { $_ } }; ^
+     Set-Content $cf $cl2; ^
+     Write-Host '  [OK] Generated and applied a new API key to both .env files.' ^
+   } else { ^
+     Write-Host '  [OK] API key already configured -- skipping generation.' ^
+   }"
+
 :: Patch YTDLP_PATH in server\.env
 powershell -NoProfile -Command "$f='%SERVER_DIR%\.env'; $p='%YTDLP_EXE%'; $l=Get-Content $f; $ok=$false; $l=$l|ForEach-Object{ if($_ -match '^YTDLP_PATH='){'YTDLP_PATH='+$p; $ok=$true}else{$_} }; if(-not $ok){$l+='YTDLP_PATH='+$p}; Set-Content $f $l"
 echo   [OK] YTDLP_PATH set to: %YTDLP_EXE%
